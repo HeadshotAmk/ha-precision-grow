@@ -1,0 +1,141 @@
+blueprint:
+  name: Precision Grow — VPD climate control
+  description: >
+    Controls humidifier, dehumidifier and optionally a heater based on the
+    integration's VPD status sensor.
+    VPD too low (too humid) -> dehumidifier on, humidifier off.
+    VPD too high (too dry) -> humidifier on, dehumidifier off.
+    Optimal -> both off. The hysteresis is built into the optimal range of the
+    phase targets.
+  domain: automation
+  author: HeadshotAmk
+  input:
+    vpd_status:
+      name: VPD status sensor
+      description: sensor.<grow>_vpd_status
+      selector:
+        entity:
+          filter:
+            - integration: precision_grow
+    humidifier:
+      name: Humidifier (optional)
+      default: ""
+      selector:
+        entity:
+          filter:
+            - domain: [switch, humidifier, fan]
+    dehumidifier:
+      name: Dehumidifier (optional)
+      default: ""
+      selector:
+        entity:
+          filter:
+            - domain: [switch, humidifier, fan]
+    heater:
+      name: Heater (optional, switchable)
+      default: ""
+      selector:
+        entity:
+          filter:
+            - domain: [switch]
+    temp_sensor:
+      name: Temperature sensor for heater (optional)
+      default: ""
+      selector:
+        entity:
+          filter:
+            - domain: [sensor]
+              device_class: temperature
+    temp_min:
+      name: Min temperature (°C) — heater on below
+      default: 20
+      selector:
+        number:
+          min: 5
+          max: 35
+          step: 0.5
+          unit_of_measurement: "°C"
+          mode: box
+
+mode: queued
+max: 10
+
+variables:
+  humidifier: !input humidifier
+  dehumidifier: !input dehumidifier
+  heater: !input heater
+  temp_sensor: !input temp_sensor
+  temp_min: !input temp_min
+
+trigger:
+  - platform: state
+    entity_id: !input vpd_status
+    id: vpd
+  # Check heater periodically (avoids an empty entity_id trigger for the optional sensor)
+  - platform: time_pattern
+    minutes: "/5"
+    id: temp
+
+action:
+  - choose:
+      # ----- VPD control -----
+      - conditions:
+          - condition: trigger
+            id: vpd
+        sequence:
+          - choose:
+              # too dry -> humidify
+              - conditions:
+                  - "{{ trigger.to_state.state == 'high' }}"
+                sequence:
+                  - if: "{{ humidifier not in ['', none] }}"
+                    then:
+                      - service: homeassistant.turn_on
+                        target:
+                          entity_id: "{{ humidifier }}"
+                  - if: "{{ dehumidifier not in ['', none] }}"
+                    then:
+                      - service: homeassistant.turn_off
+                        target:
+                          entity_id: "{{ dehumidifier }}"
+              # too humid -> dehumidify
+              - conditions:
+                  - "{{ trigger.to_state.state == 'low' }}"
+                sequence:
+                  - if: "{{ dehumidifier not in ['', none] }}"
+                    then:
+                      - service: homeassistant.turn_on
+                        target:
+                          entity_id: "{{ dehumidifier }}"
+                  - if: "{{ humidifier not in ['', none] }}"
+                    then:
+                      - service: homeassistant.turn_off
+                        target:
+                          entity_id: "{{ humidifier }}"
+            # optimal -> both off
+            default:
+              - if: "{{ humidifier not in ['', none] }}"
+                then:
+                  - service: homeassistant.turn_off
+                    target:
+                      entity_id: "{{ humidifier }}"
+              - if: "{{ dehumidifier not in ['', none] }}"
+                then:
+                  - service: homeassistant.turn_off
+                    target:
+                      entity_id: "{{ dehumidifier }}"
+      # ----- Temperature / heater -----
+      - conditions:
+          - condition: trigger
+            id: temp
+          - "{{ heater not in ['', none] and temp_sensor not in ['', none] }}"
+        sequence:
+          - if: "{{ states(temp_sensor) | float(99) < temp_min | float }}"
+            then:
+              - service: homeassistant.turn_on
+                target:
+                  entity_id: "{{ heater }}"
+            else:
+              - service: homeassistant.turn_off
+                target:
+                  entity_id: "{{ heater }}"

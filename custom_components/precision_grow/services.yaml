@@ -1,0 +1,245 @@
+log_runoff:
+  name: Log runoff
+  description: Save a runoff measurement and compute a nutrient recommendation.
+  fields:
+    entry_id:
+      name: Grow
+      description: Config entry ID of the grow (optional, otherwise all).
+      required: false
+      selector:
+        text:
+    runoff_ec:
+      name: Runoff EC
+      description: Measured EC in the runoff (mS/cm).
+      required: true
+      example: 2.4
+      selector:
+        number:
+          min: 0
+          max: 10
+          step: 0.1
+          unit_of_measurement: mS/cm
+          mode: box
+    runoff_ph:
+      name: Runoff pH
+      description: Measured pH in the runoff.
+      required: true
+      example: 6.2
+      selector:
+        number:
+          min: 3
+          max: 9
+          step: 0.1
+          mode: box
+    volume_ml:
+      name: Runoff volume
+      description: Collected volume (mL).
+      required: false
+      selector:
+        number:
+          min: 0
+          max: 5000
+          step: 10
+          unit_of_measurement: mL
+          mode: box
+    ppm:
+      name: PPM
+      description: Optional PPM value.
+      required: false
+      selector:
+        number:
+          min: 0
+          max: 5000
+          step: 10
+          mode: box
+    note:
+      name: Note
+      description: Free-text note.
+      required: false
+      selector:
+        text:
+
+advance_phase:
+  name: Advance phase
+  description: Move to the next growth phase.
+  fields:
+    entry_id:
+      name: Grow
+      required: false
+      selector:
+        text:
+
+set_phase:
+  name: Set phase
+  description: Set the growth phase directly.
+  fields:
+    entry_id:
+      name: Grow
+      required: false
+      selector:
+        text:
+    phase:
+      name: Phase
+      required: true
+      selector:
+        select:
+          translation_key: phase
+          options:
+            - clone
+            - veg
+            - stretch
+            - bulk
+            - ripen
+            - drying
+
+add_diary_entry:
+  name: Diary entry
+  description: Assign a comment/image to today's diary entry.
+  fields:
+    entry_id:
+      name: Grow
+      required: false
+      selector:
+        text:
+    comment:
+      name: Comment
+      required: false
+      selector:
+        text:
+          multiline: true
+    image:
+      name: Image path/URL
+      description: e.g. /local/grow/day12.jpg or media-source URL
+      required: false
+      selector:
+        text:
+
+test_setup:
+  name: Test setup
+  description: Test and validate all mapped sensors and devices (excludes pump unless include_pump=true).
+  fields:
+    entry_id:
+      name: Grow
+      required: false
+      selector:
+        text:
+    include_pump:
+      name: Include pump
+      description: Only enable if the sprinklers are placed in a container!
+      required: false
+      default: false
+      selector:
+        boolean:
+    duration:
+      name: Test duration per device (s)
+      required: false
+      default: 60
+      selector:
+        number:
+          min: 5
+          max: 300
+          step: 5
+          unit_of_measurement: s
+          mode: box
+
+test_pump:
+  name: Test pump
+  description: Briefly test the pump only. WARNING — place the sprinklers in a container first!
+  fields:
+    entry_id:
+      name: Grow
+      required: false
+      selector:
+        text:
+    duration:
+      name: Run time (s)
+      required: false
+      default: 15
+      selector:
+        number:
+          min: 1
+          max: 60
+          step: 1
+          unit_of_measurement: s
+          mode: box
+
+confirm_flower_switch:
+  name: Confirm flower switch
+  description: Confirm the 12/12 switch into flowering (regular plants).
+  fields:
+    entry_id:
+      name: Grow
+      required: false
+      selector:
+        text:
+
+postpone_flower_switch:
+  name: Postpone flower switch
+  description: Postpone the flower switch by the configured number of days.
+  fields:
+    entry_id:
+      name: Grow
+      required: false
+      selector:
+        text:
+
+archive_grow:
+  name: Archive grow
+  description: Copy the current grow (media + diary + summary) to the archive.
+  fields:
+    entry_id:
+      name: Grow
+      required: false
+      selector:
+        text:
+
+export_csv:
+  name: Export CSV
+  description: Write the runoff log + meta to the grow media folder (Synology) or /config/www.
+  fields:
+    entry_id:
+      name: Grow
+      required: false
+      selector:
+        text:
+
+set_harvest:
+  name: Set harvest
+  description: Wet/dry weight and extra cost for the cost-per-gram calculation.
+  fields:
+    entry_id:
+      name: Grow
+      required: false
+      selector:
+        text:
+    wet_g:
+      name: Wet weight
+      required: true
+      selector:
+        number:
+          min: 0
+          max: 100000
+          step: 1
+          unit_of_measurement: g
+          mode: box
+    dry_g:
+      name: Dry weight
+      required: true
+      selector:
+        number:
+          min: 0
+          max: 100000
+          step: 1
+          unit_of_measurement: g
+          mode: box
+    extra_cost:
+      name: Extra cost
+      description: Substrate, nutrients, water etc. (€).
+      required: false
+      selector:
+        number:
+          min: 0
+          max: 10000
+          step: 0.5
+          unit_of_measurement: €
+          mode: box

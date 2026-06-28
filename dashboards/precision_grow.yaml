@@ -1,0 +1,711 @@
+# Precision Grow — Overview dashboard
+# ---------------------------------------------------------------------------
+# PREREQUISITES (install via HACS):
+#   - Mushroom            (custom:mushroom-*)
+#   - ApexCharts Card     (custom:apexcharts-card)
+#
+# CUSTOMIZE:
+#   All entities use the "grow1" prefix. Replace "grow1" with the
+#   slug of your grow (find/replace). Check the real entity IDs under
+#   Developer Tools → States (object ID = device + entity name).
+# ---------------------------------------------------------------------------
+title: Precision Grow
+views:
+  - title: Overview
+    path: overview
+    icon: mdi:sprout
+    cards:
+      # ===== Header =====
+      - type: custom:mushroom-template-card
+        primary: "{{ state_attr('sensor.grow1_phase','friendly_name') | default('Grow') }}"
+        secondary: >-
+          Phase {{ states('sensor.grow1_phase') }} · day
+          {{ states('sensor.grow1_day_in_phase') }} in phase · flower day
+          {{ states('sensor.grow1_flower_day') }} · total day
+          {{ states('sensor.grow1_day_total') }}
+        icon: mdi:cannabis
+        icon_color: green
+        fill_container: true
+
+      # ===== Training banner (only when an event is due) =====
+      - type: conditional
+        conditions:
+          - entity: sensor.grow1_next_training_event
+            state_not: "unknown"
+          - entity: sensor.grow1_next_training_event
+            state_not: "unavailable"
+        card:
+          type: custom:mushroom-template-card
+          primary: "Upcoming: {{ states('sensor.grow1_next_training_event') }}"
+          secondary: >-
+            {% set d = state_attr('sensor.grow1_next_training_event','in_days') %}
+            {{ 'today' if d == 0 else 'tomorrow' if d == 1 else 'in ' ~ d ~ ' days' }}
+          icon: mdi:content-cut
+          icon_color: orange
+          fill_container: true
+
+      # ===== Flower switch reminder (regular plants, conditional) =====
+      - type: conditional
+        conditions:
+          - entity: binary_sensor.grow1_flower_switch_due
+            state: "on"
+        card:
+          type: vertical-stack
+          cards:
+            - type: custom:mushroom-template-card
+              primary: Switch to 12/12?
+              secondary: >-
+                Veg time reached (day {{ states('sensor.grow1_day_total') }}).
+                Confirm flowering or postpone.
+              icon: mdi:flower-tulip
+              icon_color: pink
+              multiline_secondary: true
+            - type: grid
+              columns: 2
+              square: false
+              cards:
+                - type: custom:mushroom-template-card
+                  primary: Switch to flower
+                  icon: mdi:flower
+                  icon_color: green
+                  tap_action:
+                    action: call-service
+                    service: button.press
+                    target:
+                      entity_id: button.grow1_confirm_flower_switch
+                    confirmation:
+                      text: Switch to 12/12 flowering now?
+                - type: custom:mushroom-entity-card
+                  entity: button.grow1_postpone_flower_switch
+                  icon: mdi:calendar-clock
+                  icon_color: amber
+                  primary_info: name
+
+      # ===== Light: from-to + progress bar =====
+      - type: vertical-stack
+        cards:
+          - type: custom:mushroom-template-card
+            primary: >-
+              Light {{ 'ON' if is_state_attr('sensor.grow1_light_progress','light_on', true) else 'OFF' }}
+            secondary: >-
+              {{ state_attr('sensor.grow1_light_progress','lights_on_time') }} →
+              {{ state_attr('sensor.grow1_light_progress','lights_off_time') }} · on for
+              {% set e = state_attr('sensor.grow1_light_progress','light_elapsed_min') | int(0) %}{{ (e//60) }}h {{ '%02d'|format(e%60) }}m · left
+              {% set r = state_attr('sensor.grow1_light_progress','light_remaining_min') | int(0) %}{{ (r//60) }}h {{ '%02d'|format(r%60) }}m
+            icon: mdi:white-balance-sunny
+            icon_color: >-
+              {{ 'amber' if is_state_attr('sensor.grow1_light_progress','light_on', true) else 'blue-grey' }}
+          - type: custom:apexcharts-card
+            chart_type: bar
+            header:
+              show: false
+            apex_config:
+              chart:
+                height: 70
+                sparkline:
+                  enabled: true
+              plotOptions:
+                bar:
+                  horizontal: true
+                  borderRadius: 6
+              dataLabels:
+                enabled: true
+                formatter: |
+                  EVAL:function(val){ return Math.round(val) + ' %'; }
+              xaxis:
+                max: 100
+              tooltip:
+                enabled: false
+            series:
+              - entity: sensor.grow1_light_progress
+                name: Light progress
+
+      # ===== Climate grid =====
+      - type: custom:mushroom-template-card
+        primary: VPD
+        secondary: >-
+          {{ states('sensor.grow1_vpd') }} kPa · Leaf
+          {{ states('sensor.grow1_leaf_vpd') }} kPa
+        icon: mdi:water-percent
+        icon_color: >-
+          {% set s = states('sensor.grow1_vpd_status') %}
+          {{ 'green' if s == 'optimal' else 'red' if s == 'high' else 'blue' }}
+      - type: grid
+        columns: 2
+        square: false
+        cards:
+          - type: custom:mushroom-entity-card
+            entity: sensor.grow1_temperature
+            icon: mdi:thermometer
+            icon_color: orange
+          - type: custom:mushroom-entity-card
+            entity: sensor.grow1_humidity
+            icon: mdi:water
+            icon_color: blue
+          - type: custom:mushroom-entity-card
+            entity: sensor.grow1_co2
+            icon: mdi:molecule-co2
+            icon_color: grey
+          - type: custom:mushroom-entity-card
+            entity: sensor.grow1_dli
+            icon: mdi:sun-wireless
+            icon_color: amber
+
+      # ===== DLI / light intensity =====
+      - type: vertical-stack
+        cards:
+          - type: custom:mushroom-template-card
+            primary: >-
+              DLI {{ states('sensor.grow1_dli') }} / {{ state_attr('sensor.grow1_dli','target_max') }} mol
+            secondary: >-
+              PPFD {{ states('sensor.grow1_ppfd') }} µmol ({{ state_attr('sensor.grow1_ppfd','source') }}) ·
+              Brightness {{ states('sensor.grow1_brightness_pct') }} %
+            icon: mdi:sun-wireless
+            icon_color: >-
+              {% set s = states('sensor.grow1_dli_status') %}
+              {{ 'green' if s == 'optimal' else 'red' if s == 'high' else 'amber' }}
+            multiline_secondary: true
+          - type: custom:apexcharts-card
+            chart_type: bar
+            header:
+              show: false
+            apex_config:
+              chart:
+                height: 60
+                sparkline:
+                  enabled: true
+              plotOptions:
+                bar:
+                  horizontal: true
+                  borderRadius: 6
+              dataLabels:
+                enabled: true
+                formatter: |
+                  EVAL:function(val){ return Math.round(val) + ' % of target'; }
+              xaxis:
+                max: 100
+              tooltip:
+                enabled: false
+            series:
+              - entity: sensor.grow1_dli
+                name: DLI target
+                attribute: percent_of_target
+
+      # ===== VPD/temp/RH 24h history =====
+      - type: custom:apexcharts-card
+        header:
+          show: true
+          title: Climate 24h
+        graph_span: 24h
+        yaxis:
+          - id: kpa
+            min: 0
+            max: 2
+          - id: pct
+            opposite: true
+            min: 0
+            max: 100
+        series:
+          - entity: sensor.grow1_vpd
+            name: VPD
+            yaxis_id: kpa
+            stroke_width: 2
+          - entity: sensor.grow1_temperature
+            name: Temp
+            yaxis_id: pct
+          - entity: sensor.grow1_humidity
+            name: RH
+            yaxis_id: pct
+
+      # ===== Dryback + irrigation =====
+      - type: grid
+        columns: 2
+        square: false
+        cards:
+          - type: custom:mushroom-template-card
+            primary: Dryback
+            secondary: >-
+              {{ states('sensor.grow1_dryback') }} % ·
+              {{ states('sensor.grow1_dryback_rate') }} %/h
+            icon: mdi:water-minus
+            icon_color: >-
+              {% set s = states('sensor.grow1_dryback_status') %}
+              {{ 'green' if s == 'optimal' else 'red' }}
+          - type: custom:mushroom-template-card
+            primary: "P-Phase {{ states('sensor.grow1_p_phase') }}"
+            secondary: >-
+              Transpiration {{ states('sensor.grow1_transpiration_rate') }} g/h ·
+              Shot {{ states('sensor.grow1_shot_volume') }} mL
+            icon: mdi:clock-time-four
+            icon_color: cyan
+
+      # ===== Reservoir =====
+      - type: custom:mushroom-template-card
+        primary: Reservoir
+        secondary: >-
+          {{ states('sensor.grow1_reservoir_liters') }} L
+          ({{ states('sensor.grow1_reservoir') }} %)
+        icon: mdi:car-coolant-level
+        icon_color: >-
+          {% set s = states('sensor.grow1_reservoir_status') %}
+          {{ 'green' if s == 'ok' else 'orange' if s == 'low' else 'red' }}
+        badge_icon: >-
+          {{ 'mdi:alert' if states('sensor.grow1_reservoir_status') == 'critical' else '' }}
+        badge_color: red
+
+      # ===== Nutrient recommendation =====
+      - type: custom:mushroom-template-card
+        primary: "Nutrient: {{ states('sensor.grow1_nutrient_recommendation') }}"
+        secondary: >-
+          Last runoff: EC
+          {{ state_attr('sensor.grow1_nutrient_recommendation','runoff_ec') }} · pH
+          {{ state_attr('sensor.grow1_nutrient_recommendation','runoff_ph') }}
+        icon: mdi:flask
+        icon_color: >-
+          {% set r = states('sensor.grow1_nutrient_recommendation') %}
+          {{ 'red' if r in ['flush','check_roots'] else 'green' if r == 'increase_ec' else 'blue' }}
+
+      # ===== Quick controls =====
+      - type: custom:mushroom-title-card
+        title: Controls
+      - type: horizontal-stack
+        cards:
+          - type: custom:mushroom-select-card
+            entity: select.grow1_phase
+          - type: custom:mushroom-entity-card
+            entity: button.grow1_advance_phase
+            icon: mdi:skip-next
+      - type: grid
+        columns: 2
+        square: false
+        cards:
+          - type: custom:mushroom-entity-card
+            entity: button.grow1_calibrate_field_capacity
+            icon: mdi:scale-balance
+          - type: custom:mushroom-entity-card
+            entity: button.grow1_calibrate_dry_weight
+            icon: mdi:scale
+          - type: custom:mushroom-entity-card
+            entity: button.grow1_calibrate_reservoir_empty
+            icon: mdi:cup-off-outline
+          - type: custom:mushroom-entity-card
+            entity: button.grow1_calibrate_reservoir_full
+            icon: mdi:cup-water
+
+      # ===== Energy =====
+      - type: grid
+        columns: 2
+        square: false
+        cards:
+          - type: custom:mushroom-entity-card
+            entity: sensor.grow1_daily_cost
+            icon: mdi:cash-clock
+            icon_color: green
+          - type: custom:mushroom-entity-card
+            entity: sensor.grow1_energy_cost
+            icon: mdi:currency-eur
+            icon_color: green
+
+  # =========================================================================
+  - title: Irrigation
+    path: irrigation
+    icon: mdi:watering-can
+    cards:
+      - type: grid
+        columns: 2
+        square: false
+        cards:
+          - type: custom:mushroom-template-card
+            primary: Dryback
+            secondary: "{{ states('sensor.grow1_dryback') }} % · {{ states('sensor.grow1_dryback_rate') }} %/h"
+            icon: mdi:water-minus
+            icon_color: >-
+              {{ 'green' if states('sensor.grow1_dryback_status') == 'optimal' else 'red' }}
+          - type: custom:mushroom-template-card
+            primary: "P-Phase {{ states('sensor.grow1_p_phase') }}"
+            secondary: "Transpiration {{ states('sensor.grow1_transpiration_rate') }} g/h"
+            icon: mdi:clock-time-four
+            icon_color: cyan
+      - type: custom:apexcharts-card
+        header:
+          show: true
+          title: Dryback & weight 24h
+        graph_span: 24h
+        yaxis:
+          - id: pct
+            min: 0
+            max: 60
+          - id: g
+            opposite: true
+        series:
+          - entity: sensor.grow1_dryback
+            name: Dryback %
+            yaxis_id: pct
+            stroke_width: 2
+          - entity: sensor.grow1_weight
+            name: Weight
+            yaxis_id: g
+      - type: custom:apexcharts-card
+        header:
+          show: true
+          title: Transpiration 24h
+        graph_span: 24h
+        series:
+          - entity: sensor.grow1_transpiration_rate
+            name: g/h
+            type: area
+      - type: custom:mushroom-template-card
+        primary: "Shot volume: {{ states('sensor.grow1_shot_volume') }} mL"
+        secondary: >-
+          1 % = {{ state_attr('sensor.grow1_shot_volume','shot_volume_1pct') }} mL ·
+          Runoff veg {{ state_attr('sensor.grow1_shot_volume','runoff_target_veg_ml') }} mL ·
+          gen {{ state_attr('sensor.grow1_shot_volume','runoff_target_gen_ml') }} mL
+        icon: mdi:cup-water
+        icon_color: blue
+      - type: custom:mushroom-template-card
+        primary: Reservoir
+        secondary: >-
+          {{ states('sensor.grow1_reservoir_liters') }} L ({{ states('sensor.grow1_reservoir') }} %)
+        icon: mdi:car-coolant-level
+        icon_color: >-
+          {% set s = states('sensor.grow1_reservoir_status') %}
+          {{ 'green' if s == 'ok' else 'orange' if s == 'low' else 'red' }}
+      - type: history-graph
+        title: Reservoir history
+        hours_to_show: 72
+        entities:
+          - entity: sensor.grow1_reservoir
+      - type: logbook
+        title: Irrigation log
+        target:
+          entity_id:
+            - sensor.grow1_p_phase
+            - sensor.grow1_dryback
+        hours_to_show: 48
+
+  # =========================================================================
+  - title: Nutrients
+    path: nutrients
+    icon: mdi:flask
+    cards:
+      - type: custom:mushroom-template-card
+        primary: "{{ states('sensor.grow1_nutrient_recommendation') }}"
+        secondary: >-
+          Last runoff: EC {{ state_attr('sensor.grow1_nutrient_recommendation','runoff_ec') }} ·
+          pH {{ state_attr('sensor.grow1_nutrient_recommendation','runoff_ph') }} ·
+          Target EC {{ state_attr('sensor.grow1_nutrient_recommendation','target_ec') }}
+        icon: mdi:flask
+        icon_color: >-
+          {% set r = states('sensor.grow1_nutrient_recommendation') %}
+          {{ 'red' if r in ['flush','check_roots'] else 'green' if r == 'increase_ec' else 'blue' }}
+        multiline_secondary: true
+      - type: custom:mushroom-title-card
+        title: Log runoff
+      - type: grid
+        columns: 2
+        square: false
+        cards:
+          - type: custom:mushroom-number-card
+            entity: number.grow1_runoff_ec_input
+            display_mode: buttons
+          - type: custom:mushroom-number-card
+            entity: number.grow1_runoff_ph_input
+            display_mode: buttons
+          - type: custom:mushroom-number-card
+            entity: number.grow1_runoff_volume_input
+            display_mode: buttons
+          - type: custom:mushroom-number-card
+            entity: number.grow1_runoff_ppm_input
+            display_mode: buttons
+      - type: custom:mushroom-entity-card
+        entity: button.grow1_submit_runoff
+        icon: mdi:content-save
+        icon_color: green
+      - type: custom:apexcharts-card
+        header:
+          show: true
+          title: EC / pH history 7 days
+        graph_span: 7d
+        yaxis:
+          - id: ec
+            min: 0
+            max: 4
+          - id: ph
+            opposite: true
+            min: 4
+            max: 8
+        series:
+          - entity: sensor.grow1_ec
+            name: EC
+            yaxis_id: ec
+            stroke_width: 2
+          - entity: sensor.grow1_ph
+            name: pH
+            yaxis_id: ph
+            stroke_width: 2
+      - type: logbook
+        title: Runoff log
+        target:
+          entity_id:
+            - sensor.grow1_nutrient_recommendation
+        hours_to_show: 336
+
+  # =========================================================================
+  - title: Energy & cost
+    path: energy
+    icon: mdi:flash
+    cards:
+      - type: grid
+        columns: 2
+        square: false
+        cards:
+          - type: custom:mushroom-entity-card
+            entity: sensor.grow1_daily_cost
+            icon: mdi:cash-clock
+            icon_color: green
+          - type: custom:mushroom-entity-card
+            entity: sensor.grow1_energy_cost
+            icon: mdi:currency-eur
+            icon_color: green
+          - type: custom:mushroom-entity-card
+            entity: sensor.grow1_energy_total
+            icon: mdi:lightning-bolt
+            icon_color: amber
+          - type: custom:mushroom-entity-card
+            entity: sensor.grow1_cost_per_gram
+            icon: mdi:scale-balance
+            icon_color: purple
+      - type: custom:apexcharts-card
+        header:
+          show: true
+          title: Cost timeline
+        graph_span: 30d
+        series:
+          - entity: sensor.grow1_energy_cost
+            name: Energy cost €
+            type: area
+      - type: markdown
+        title: kWh per device
+        content: >-
+          {% set d = state_attr('sensor.grow1_energy_total','energy_by_device') %}
+          {% if d %}{% for k, v in d.items() %}- **{{ k }}**: {{ v }} kWh
+          {% endfor %}{% else %}No power sensors mapped.{% endif %}
+      - type: custom:mushroom-title-card
+        title: Harvest calculator
+      - type: grid
+        columns: 2
+        square: false
+        cards:
+          - type: custom:mushroom-number-card
+            entity: number.grow1_harvest_wet_input
+            display_mode: buttons
+          - type: custom:mushroom-number-card
+            entity: number.grow1_harvest_dry_input
+            display_mode: buttons
+          - type: custom:mushroom-number-card
+            entity: number.grow1_harvest_extra_input
+            display_mode: buttons
+          - type: custom:mushroom-entity-card
+            entity: button.grow1_submit_harvest
+            icon: mdi:content-save-check
+            icon_color: green
+
+  # =========================================================================
+  - title: Grow log
+    path: log
+    icon: mdi:notebook
+    cards:
+      - type: custom:mushroom-template-card
+        primary: "Phase {{ states('sensor.grow1_phase') }}"
+        secondary: >-
+          Day {{ states('sensor.grow1_day_in_phase') }} in phase · week
+          {{ states('sensor.grow1_week_in_phase') }} · flower day
+          {{ states('sensor.grow1_flower_day') }} · total day
+          {{ states('sensor.grow1_day_total') }}
+        icon: mdi:sprout
+        icon_color: green
+        multiline_secondary: true
+      - type: custom:mushroom-template-card
+        primary: "Next event: {{ states('sensor.grow1_next_training_event') }}"
+        secondary: >-
+          {% set d = state_attr('sensor.grow1_next_training_event','in_days') %}
+          {{ 'today' if d == 0 else 'tomorrow' if d == 1 else 'in ' ~ d ~ ' days' if d is not none else '—' }}
+        icon: mdi:content-cut
+        icon_color: orange
+      - type: history-graph
+        title: Phase timeline
+        hours_to_show: 2160
+        entities:
+          - entity: sensor.grow1_phase
+          - entity: sensor.grow1_flower_day
+      - type: logbook
+        title: Events
+        target:
+          entity_id:
+            - sensor.grow1_phase
+            - sensor.grow1_next_training_event
+        hours_to_show: 720
+      - type: custom:mushroom-title-card
+        title: Diary
+      - type: entities
+        entities:
+          - entity: text.grow1_diary_comment
+          - entity: text.grow1_diary_image
+      - type: custom:mushroom-entity-card
+        entity: button.grow1_save_diary
+        icon: mdi:notebook-plus
+        icon_color: green
+        primary_info: name
+      - type: markdown
+        content: >-
+          {% for e in state_attr('sensor.grow1_diary_count','entries') or [] %}
+          ### {{ e.date }} — {{ e.snapshot.phase }} (day {{ e.snapshot.day_total }}, flower {{ e.snapshot.flower_day }})
+
+          {% if e.comment %}{{ e.comment }}
+
+          {% endif %}VPD {{ e.snapshot.vpd }} kPa · {{ e.snapshot.temp }} °C · {{ e.snapshot.humidity }} % RH · Dryback {{ e.snapshot.dryback_pct }} % · DLI {{ e.snapshot.dli }}
+
+          {% set img = e.thumb or e.image %}{% if img %}![Day {{ e.snapshot.day_total }}]({{ img }})
+
+          {% endif %}---
+
+          {% endfor %}
+      - type: custom:mushroom-title-card
+        title: Compare grows (A/B)
+      - type: grid
+        columns: 2
+        square: false
+        cards:
+          - type: custom:mushroom-select-card
+            entity: select.grow1_compare_a
+          - type: custom:mushroom-select-card
+            entity: select.grow1_compare_b
+      - type: custom:mushroom-entity-card
+        entity: button.grow1_compare_grows
+        icon: mdi:compare
+        icon_color: blue
+        primary_info: name
+      - type: markdown
+        content: >-
+          {% set c = state_attr('sensor.grow1_comparison','rows') %}
+          {% set a = state_attr('sensor.grow1_comparison','a_label') %}
+          {% set b = state_attr('sensor.grow1_comparison','b_label') %}
+          {% if c %}**{{ a }}** vs **{{ b }}**
+
+          | Metric | A | B |
+          |---|---|---|
+          {% for r in c %}| {{ r.field }} | {{ r.a }} | {{ r.b }} |
+          {% endfor %}{% else %}No comparison yet. Select A and B, then "Compare grows".{% endif %}
+
+  # =========================================================================
+  - title: Settings
+    path: settings
+    icon: mdi:cog
+    cards:
+      - type: custom:mushroom-title-card
+        title: Targets & parameters
+      - type: entities
+        entities:
+          - entity: number.grow1_photoperiod
+          - entity: number.grow1_leaf_temperature_offset
+          - entity: number.grow1_power_price
+          - entity: number.grow1_container_size
+          - entity: number.grow1_reservoir_volume
+          - entity: number.grow1_flower_postpone_days
+          - entity: select.grow1_phase
+      - type: custom:mushroom-title-card
+        title: Calibration & actions
+      - type: grid
+        columns: 2
+        square: false
+        cards:
+          - type: custom:mushroom-entity-card
+            entity: button.grow1_advance_phase
+            icon: mdi:skip-next
+          - type: custom:mushroom-entity-card
+            entity: button.grow1_reset_dryback
+            icon: mdi:restart
+          - type: custom:mushroom-entity-card
+            entity: button.grow1_calibrate_field_capacity
+            icon: mdi:scale-balance
+          - type: custom:mushroom-entity-card
+            entity: button.grow1_calibrate_dry_weight
+            icon: mdi:scale
+          - type: custom:mushroom-entity-card
+            entity: button.grow1_calibrate_reservoir_empty
+            icon: mdi:cup-off-outline
+          - type: custom:mushroom-entity-card
+            entity: button.grow1_calibrate_reservoir_full
+            icon: mdi:cup-water
+      - type: custom:mushroom-title-card
+        title: Test my Setup
+      - type: custom:mushroom-template-card
+        primary: >-
+          Setup test: {{ states('sensor.grow1_test_status') }}
+        secondary: Measure and validate sensors + devices
+        icon: mdi:clipboard-check
+        icon_color: >-
+          {% set s = states('sensor.grow1_test_status') %}
+          {{ 'green' if s == 'pass' else 'red' if s == 'fail' else 'amber' if s == 'warning' else 'grey' }}
+        tap_action:
+          action: call-service
+          service: button.press
+          target:
+            entity_id: button.grow1_test_setup
+          confirmation:
+            text: >-
+              Setup test starts now: devices are switched on/off one by one
+              and the sensors are measured. Continue?
+      - type: custom:mushroom-template-card
+        primary: Test pump
+        secondary: ⚠️ Place the sprinklers in a container first!
+        icon: mdi:water-pump
+        icon_color: red
+        tap_action:
+          action: call-service
+          service: button.press
+          target:
+            entity_id: button.grow1_test_pump
+          confirmation:
+            text: >-
+              WARNING: Are the sprinklers/drippers in a container? Otherwise
+              the tent will be flooded! Test the pump now?
+      - type: markdown
+        content: >-
+          {% set r = state_attr('sensor.grow1_test_status','sensors') %}
+          {% set d = state_attr('sensor.grow1_test_status','devices') %}
+          {% if r %}**Sensors**
+
+          {% for k, v in r.items() %}- {{ k }}: {{ v }}
+          {% endfor %}
+
+          {% endif %}{% if d %}**Devices**
+
+          {% for k, v in d.items() %}- {{ k }}: **{{ v.result }}**{% if v.delta is defined %} (Δ {{ v.delta }}){% endif %}
+          {% endfor %}{% endif %}
+      - type: custom:mushroom-title-card
+        title: Data export & archive
+      - type: custom:mushroom-entity-card
+        entity: button.grow1_export_csv
+        icon: mdi:file-export
+        icon_color: blue
+      - type: custom:mushroom-template-card
+        primary: Archive grow
+        secondary: Media + diary + summary to the Syno archive
+        icon: mdi:archive-arrow-down
+        icon_color: blue
+        tap_action:
+          action: call-service
+          service: button.press
+          target:
+            entity_id: button.grow1_archive_grow
+          confirmation:
+            text: >-
+              Copy the current grow to the archive (media + diary +
+              summary)?
+      - type: markdown
+        content: >-
+          Edit phase targets: Settings → Devices & Services →
+          Precision Grow → Configure → "Edit phase targets".
+          Also photoperiod / leaf offset / power price there. CSV export goes to
+          the grow media folder / config/www.

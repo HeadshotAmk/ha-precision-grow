@@ -1,0 +1,91 @@
+blueprint:
+  name: Precision Grow — Flower switch reminder (12/12)
+  description: >
+    For regular (photoperiod) plants: when the configured veg time is reached,
+    sends a reminder asking to confirm the switch to 12/12 (flowering) or to
+    postpone by the configured number of days. Nothing switches automatically.
+    Actionable push buttons call the confirm/postpone services; the same actions
+    are available as dashboard buttons.
+  domain: automation
+  author: HeadshotAmk
+  input:
+    flower_due_sensor:
+      name: Flower-switch-due sensor
+      description: binary_sensor.<grow>_flower_switch_due
+      selector:
+        entity:
+          filter:
+            - integration: precision_grow
+              domain: binary_sensor
+    notify_service:
+      name: Notify service (optional, actionable)
+      description: e.g. notify.mobile_app_your_phone (empty = dashboard banner only)
+      default: ""
+      selector:
+        text:
+
+mode: single
+
+variables:
+  notify_service: !input notify_service
+
+trigger:
+  - platform: state
+    entity_id: !input flower_due_sensor
+    to: "on"
+    id: due
+  - platform: event
+    event_type: mobile_app_notification_action
+    event_data:
+      action: PG_CONFIRM_FLOWER
+    id: confirm
+  - platform: event
+    event_type: mobile_app_notification_action
+    event_data:
+      action: PG_POSTPONE_FLOWER
+    id: postpone
+
+action:
+  - choose:
+      # ----- Reminder when due -----
+      - conditions:
+          - condition: trigger
+            id: due
+        sequence:
+          - service: persistent_notification.create
+            data:
+              notification_id: precision_grow_flower_switch
+              title: "🌸 Switch to 12/12?"
+              message: >-
+                Veg time reached. Confirm the switch to flowering or postpone it.
+                Use the Settings tab buttons (or the push actions).
+          - if: "{{ notify_service not in ['', none] }}"
+            then:
+              - service: "{{ notify_service }}"
+                data:
+                  title: "🌸 Switch to 12/12?"
+                  message: "Veg time reached — confirm flowering or postpone."
+                  data:
+                    actions:
+                      - action: PG_CONFIRM_FLOWER
+                        title: Switch to flower
+                      - action: PG_POSTPONE_FLOWER
+                        title: Postpone
+      # ----- Push action: confirm -----
+      - conditions:
+          - condition: trigger
+            id: confirm
+        sequence:
+          - service: precision_grow.confirm_flower_switch
+          - service: persistent_notification.dismiss
+            data:
+              notification_id: precision_grow_flower_switch
+      # ----- Push action: postpone -----
+      - conditions:
+          - condition: trigger
+            id: postpone
+        sequence:
+          - service: precision_grow.postpone_flower_switch
+          - service: persistent_notification.dismiss
+            data:
+              notification_id: precision_grow_flower_switch

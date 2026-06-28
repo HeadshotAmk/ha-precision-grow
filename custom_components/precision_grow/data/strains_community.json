@@ -1,0 +1,86 @@
+{
+  "_comment": "Community strain database. Timing (veg_days/flower_days) is breeder-/seed-specific — treat values as guidance and adjust from your seed packet. PRs welcome.",
+  "version": 1,
+  "strains": {
+    "northern-lights": {
+      "name": "Northern Lights",
+      "strain_type": "indica",
+      "veg_days": 28,
+      "flower_days": 49,
+      "thc": 18.0,
+      "cbd": 0.1,
+      "genetics": "Afghani × Thai",
+      "terpenes": ["myrcene", "caryophyllene", "limonene"]
+    },
+    "amnesia-haze": {
+      "name": "Amnesia Haze",
+      "strain_type": "sativa",
+      "veg_days": 28,
+      "flower_days": 70,
+      "thc": 22.0,
+      "cbd": 0.1,
+      "genetics": "Southeast Asian × Jamaican × Haze",
+      "terpenes": ["terpinolene", "limonene", "myrcene"]
+    },
+    "white-widow": {
+      "name": "White Widow",
+      "strain_type": "hybrid",
+      "veg_days": 28,
+      "flower_days": 60,
+      "thc": 19.0,
+      "cbd": 0.2,
+      "genetics": "Brazilian Sativa × South Indian Indica",
+      "terpenes": ["myrcene", "pinene", "caryophyllene"]
+    },
+    "gorilla-glue-4": {
+      "name": "Gorilla Glue #4",
+      "strain_type": "hybrid",
+      "veg_days": 28,
+      "flower_days": 63,
+      "thc": 25.0,
+      "cbd": 0.1,
+      "genetics": "Chem's Sister × Sour Dubb × Chocolate Diesel",
+      "terpenes": ["caryophyllene", "limonene", "myrcene"]
+    },
+    "blue-dream": {
+      "name": "Blue Dream",
+      "strain_type": "hybrid",
+      "veg_days": 28,
+      "flower_days": 65,
+      "thc": 21.0,
+      "cbd": 0.2,
+      "genetics": "Blueberry × Haze",
+      "terpenes": ["myrcene", "pinene", "caryophyllene"]
+    },
+    "girl-scout-cookies": {
+      "name": "Girl Scout Cookies",
+      "strain_type": "hybrid",
+      "veg_days": 28,
+      "flower_days": 63,
+      "thc": 25.0,
+      "cbd": 0.1,
+      "genetics": "OG Kush × Durban Poison",
+      "terpenes": ["caryophyllene", "limonene", "humulene"]
+    },
+    "og-kush": {
+      "name": "OG Kush",
+      "strain_type": "hybrid",
+      "veg_days": 28,
+      "flower_days": 56,
+      "thc": 23.0,
+      "cbd": 0.1,
+      "genetics": "Chemdawg × Hindu Kush × Lemon Thai",
+      "terpenes": ["limonene", "myrcene", "caryophyllene"]
+    },
+    "auto-northern-lights": {
+      "name": "Northern Lights Auto",
+      "strain_type": "auto",
+      "veg_days": 21,
+      "flower_days": 49,
+      "thc": 16.0,
+      "cbd": 0.1,
+      "genetics": "Northern Lights × Ruderalis",
+      "terpenes": ["myrcene", "caryophyllene"]
+    }
+  }
+}

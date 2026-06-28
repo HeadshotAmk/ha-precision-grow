@@ -1,0 +1,55 @@
+blueprint:
+  name: Precision Grow — Runoff reminder
+  description: >
+    Daily reminder to measure and log the runoff (push + banner).
+    Automatically skipped during the drying phase.
+  domain: automation
+  author: HeadshotAmk
+  input:
+    phase_sensor:
+      name: Phase sensor
+      description: sensor.<grow>_phase (to skip drying)
+      selector:
+        entity:
+          filter:
+            - integration: precision_grow
+    reminder_time:
+      name: Reminder time
+      default: "10:00:00"
+      selector:
+        time:
+    notify_service:
+      name: Notify service (optional)
+      default: ""
+      selector:
+        text:
+
+mode: single
+
+variables:
+  notify_service: !input notify_service
+
+trigger:
+  - platform: time
+    at: !input reminder_time
+
+condition:
+  - condition: not
+    conditions:
+      - condition: state
+        entity_id: !input phase_sensor
+        state: drying
+
+action:
+  - service: persistent_notification.create
+    data:
+      notification_id: precision_grow_runoff_reminder
+      title: "💧 Measure runoff"
+      message: >-
+        Time to measure the runoff (EC/pH) and log it in the Nutrients tab.
+  - if: "{{ notify_service not in ['', none] }}"
+    then:
+      - service: "{{ notify_service }}"
+        data:
+          title: "💧 Measure runoff"
+          message: "Measure and log the runoff (EC/pH) today."

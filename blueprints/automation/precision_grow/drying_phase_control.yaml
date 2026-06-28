@@ -1,0 +1,144 @@
+blueprint:
+  name: Precision Grow — Drying climate
+  description: >
+    During drying (phase = drying), keeps humidity and temperature at targets
+    and thereby controls VPD indirectly. Default 22 °C / 55 % RH ≈ 1.2 kPa
+    (Athena drying phase 1). Active ONLY when the phase sensor is "drying".
+  domain: automation
+  author: HeadshotAmk
+  input:
+    phase_sensor:
+      name: Phase sensor
+      description: sensor.<grow>_phase
+      selector:
+        entity:
+          filter:
+            - integration: precision_grow
+    humidity_sensor:
+      name: Humidity sensor
+      selector:
+        entity:
+          filter:
+            - domain: [sensor]
+              device_class: humidity
+    temp_sensor:
+      name: Temperature sensor
+      selector:
+        entity:
+          filter:
+            - domain: [sensor]
+              device_class: temperature
+    humidifier:
+      name: Humidifier (optional)
+      default: ""
+      selector:
+        entity:
+          filter:
+            - domain: [switch, humidifier, fan]
+    dehumidifier:
+      name: Dehumidifier (optional)
+      default: ""
+      selector:
+        entity:
+          filter:
+            - domain: [switch, humidifier, fan]
+    heater:
+      name: Heater (optional)
+      default: ""
+      selector:
+        entity:
+          filter:
+            - domain: [switch]
+    target_rh:
+      name: Target humidity (%)
+      default: 55
+      selector:
+        number:
+          min: 40
+          max: 70
+          step: 1
+          unit_of_measurement: "%"
+          mode: slider
+    target_temp:
+      name: Target temperature (°C)
+      default: 22
+      selector:
+        number:
+          min: 15
+          max: 25
+          step: 0.5
+          unit_of_measurement: "°C"
+          mode: slider
+    hysteresis_rh:
+      name: Hysteresis RH (%)
+      default: 3
+      selector:
+        number:
+          min: 1
+          max: 10
+          step: 1
+          unit_of_measurement: "%"
+          mode: box
+
+mode: queued
+max: 10
+
+variables:
+  phase_sensor: !input phase_sensor
+  humidity_sensor: !input humidity_sensor
+  temp_sensor: !input temp_sensor
+  humidifier: !input humidifier
+  dehumidifier: !input dehumidifier
+  heater: !input heater
+  target_rh: !input target_rh
+  target_temp: !input target_temp
+  hysteresis_rh: !input hysteresis_rh
+
+trigger:
+  - platform: state
+    entity_id: !input humidity_sensor
+  - platform: state
+    entity_id: !input temp_sensor
+  - platform: time_pattern
+    minutes: "/5"
+
+condition:
+  - condition: state
+    entity_id: !input phase_sensor
+    state: drying
+
+action:
+  # ----- Humidity control -----
+  - choose:
+      - conditions:
+          - "{{ states(humidity_sensor) | float(0) > target_rh | float + hysteresis_rh | float }}"
+        sequence:
+          - if: "{{ dehumidifier not in ['', none] }}"
+            then:
+              - service: homeassistant.turn_on
+                target: { entity_id: "{{ dehumidifier }}" }
+          - if: "{{ humidifier not in ['', none] }}"
+            then:
+              - service: homeassistant.turn_off
+                target: { entity_id: "{{ humidifier }}" }
+      - conditions:
+          - "{{ states(humidity_sensor) | float(100) < target_rh | float - hysteresis_rh | float }}"
+        sequence:
+          - if: "{{ humidifier not in ['', none] }}"
+            then:
+              - service: homeassistant.turn_on
+                target: { entity_id: "{{ humidifier }}" }
+          - if: "{{ dehumidifier not in ['', none] }}"
+            then:
+              - service: homeassistant.turn_off
+                target: { entity_id: "{{ dehumidifier }}" }
+  # ----- Temperature control -----
+  - if: "{{ heater not in ['', none] }}"
+    then:
+      - if: "{{ states(temp_sensor) | float(99) < target_temp | float }}"
+        then:
+          - service: homeassistant.turn_on
+            target: { entity_id: "{{ heater }}" }
+        else:
+          - service: homeassistant.turn_off
+            target: { entity_id: "{{ heater }}" }

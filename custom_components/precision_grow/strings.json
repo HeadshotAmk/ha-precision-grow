@@ -1,0 +1,292 @@
+{
+  "config": {
+    "abort": {
+      "no_clone_sources": "No templates found — neither active grows nor archives on the Synology."
+    },
+    "step": {
+      "user": {
+        "title": "Precision Grow",
+        "menu_options": {
+          "new": "New grow",
+          "clone": "Clone grow (template/archive)"
+        }
+      },
+      "clone": {
+        "title": "Choose template",
+        "description": "Use an active grow or an archived grow (Synology) as template.",
+        "data": { "source": "Source" }
+      },
+      "clone_finish": {
+        "title": "Clone: {source}",
+        "description": "Copies all settings from template {source} (strain: {strain}). Only set name, propagation and age.",
+        "data": {
+          "grow_name": "Grow name",
+          "propagation": "Started from",
+          "plant_age_days": "Plant age (days)"
+        }
+      },
+      "new": {
+        "title": "Precision Grow — Basics",
+        "description": "Basic settings for your grow.",
+        "data": {
+          "grow_name": "Grow name",
+          "propagation": "Started from",
+          "plant_age_days": "Plant age (days)",
+          "plant_count": "Number of plants",
+          "substrate": "Substrate",
+          "container_type": "Container / pot size",
+          "container_size_ml": "Container size (mL, for custom)",
+          "lights_on": "Lights-on time",
+          "power_price": "Power price (€/kWh)"
+        }
+      },
+      "strain": {
+        "title": "Strain",
+        "description": "Enter a strain name for automatic data (Cannlytics). Flowering/veg time is in no API — you confirm it in the next step.",
+        "data": {
+          "strain": "Strain name",
+          "strain_custom": "Skip lookup / enter manually"
+        }
+      },
+      "strain_confirm": {
+        "title": "Confirm strain data",
+        "description": "{info}",
+        "data": {
+          "strain_type": "Type (genetics)",
+          "plant_type": "Plant type",
+          "veg_days": "Veg time (days)",
+          "flower_days": "Flower time (days)",
+          "thc": "THC (%)",
+          "cbd": "CBD (%)"
+        }
+      },
+      "nutrients": {
+        "title": "Nutrient profile",
+        "description": "EC/pH targets are pre-filled per preset and editable later.",
+        "data": { "nutrient_preset": "Preset" }
+      },
+      "sensors": {
+        "title": "Sensor mapping (all optional)",
+        "data": {
+          "sensor_temp": "Temperature",
+          "sensor_humidity": "Humidity",
+          "sensor_weight": "Weight / load cell",
+          "sensor_reservoir": "Reservoir level / distance",
+          "sensor_co2": "CO2",
+          "sensor_ppfd": "PPFD / PAR",
+          "sensor_ec": "EC (inline)",
+          "sensor_ph": "pH (inline)",
+          "sensor_water_temp": "Water temperature",
+          "sensor_brightness": "Light brightness (e.g. Mars Hydro)",
+          "tank_volume_l": "Reservoir volume (L)"
+        }
+      },
+      "devices": {
+        "title": "Device mapping (all optional)",
+        "data": {
+          "device_heater": "Heater",
+          "device_cooler": "Cooler",
+          "device_humidifier": "Humidifier",
+          "device_dehumidifier": "Dehumidifier",
+          "device_pump": "Irrigation pump",
+          "device_light": "Light",
+          "device_exhaust": "Exhaust fan",
+          "device_co2_valve": "CO2 valve"
+        }
+      },
+      "power": {
+        "title": "Power monitoring (optional)",
+        "data": { "power_entities": "Power sensors" }
+      },
+      "storage": {
+        "title": "Storage",
+        "data": {
+          "photo_target": "Photo upload target",
+          "media_path": "Media base path (e.g. /media/synology)",
+          "diary_enabled": "Enable grow diary"
+        }
+      }
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Precision Grow options",
+        "menu_options": {
+          "general": "General settings",
+          "targets": "Edit phase targets"
+        }
+      },
+      "general": {
+        "title": "General settings",
+        "data": {
+          "photoperiod_hours": "Photoperiod (h)",
+          "leaf_offset": "Leaf temperature offset (°C)",
+          "power_price": "Power price (€/kWh)"
+        }
+      },
+      "targets": {
+        "title": "Select phase",
+        "data": { "phase": "Phase" }
+      },
+      "edit_targets": {
+        "title": "Targets: {phase}",
+        "description": "Min/max per target for phase {phase}.",
+        "data": {
+          "temp_day_min": "Temp day min (°C)",
+          "temp_day_max": "Temp day max (°C)",
+          "rh_min": "RH min (%)",
+          "rh_max": "RH max (%)",
+          "vpd_min": "VPD min (kPa)",
+          "vpd_max": "VPD max (kPa)",
+          "ppfd_min": "PPFD min",
+          "ppfd_max": "PPFD max",
+          "dryback_p3_min": "Dryback min (%)",
+          "dryback_p3_max": "Dryback max (%)"
+        }
+      }
+    }
+  },
+  "selector": {
+    "substrate": {
+      "options": {
+        "coco": "Coco", "rockwool": "Rockwool", "soil": "Soil",
+        "hydro_dwc": "Hydro DWC", "hydro_rdwc": "Hydro RDWC",
+        "hydro_nft": "Hydro NFT", "aeroponics": "Aeroponics", "custom": "Custom"
+      }
+    },
+    "container": {
+      "options": {
+        "1L_pot": "Pot 1L", "2L_pot": "Pot 2L", "3L_pot": "Pot 3L",
+        "4L_pot": "Pot 4L", "5L_pot": "Pot 5L", "7L_pot": "Pot 7L",
+        "10L_pot": "Pot 10L", "20L_pot": "Pot 20L",
+        "sw_delta65": "Rockwool 10cm Delta6.5", "sw_delta10": "Rockwool 10cm Delta10",
+        "sw_hugo": "Rockwool 15cm Hugo", "sw_unislab": "Rockwool Unislab",
+        "sw_15cm_mat": "Rockwool 15cm mat", "custom": "Custom"
+      }
+    },
+    "nutrient_preset": {
+      "options": {
+        "lucas_hydro": "Lucas Formula (Hydro)", "lucas_coco": "Lucas Formula (Coco)",
+        "ironhead_gh_coco": "Ironhead / GH Coco", "custom": "Custom"
+      }
+    },
+    "photo_target": {
+      "options": {
+        "ha_media": "HA Media", "synology": "Synology Photos",
+        "webdav": "WebDAV (UGREEN, Nextcloud)"
+      }
+    },
+    "phase": {
+      "options": {
+        "clone": "Clone", "veg": "Veg", "stretch": "Stretch",
+        "bulk": "Bulk", "ripen": "Ripen", "drying": "Drying"
+      }
+    },
+    "propagation": {
+      "options": { "seed": "Seed", "clone": "Clone" }
+    },
+    "strain_type": {
+      "options": {
+        "indica": "Indica", "sativa": "Sativa", "hybrid": "Hybrid"
+      }
+    },
+    "plant_type": {
+      "options": { "regular": "Regular (photoperiod)", "auto": "Autoflower" }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "temperature": { "name": "Temperature" },
+      "humidity": { "name": "Humidity" },
+      "co2": { "name": "CO2" },
+      "ppfd": { "name": "PPFD" },
+      "vpd": { "name": "VPD" },
+      "lvpd": { "name": "Leaf VPD" },
+      "vpd_status": { "name": "VPD status", "state": { "optimal": "Optimal", "high": "Too high", "low": "Too low" } },
+      "dli": { "name": "DLI" },
+      "dli_status": { "name": "DLI status", "state": { "optimal": "Optimal", "high": "Too high", "low": "Too low" } },
+      "co2_status": { "name": "CO2 status", "state": { "optimal": "Optimal", "high": "Too high", "low": "Too low" } },
+      "dryback_pct": { "name": "Dryback" },
+      "dryback_status": { "name": "Dryback status", "state": { "optimal": "Optimal", "high": "Too wet", "low": "Too dry" } },
+      "dryback_rate": { "name": "Dryback rate" },
+      "transpiration_rate": { "name": "Transpiration rate" },
+      "p_phase": { "name": "P phase", "state": { "P0": "P0 night", "P1": "P1 ramp", "P2": "P2 maintenance", "P3": "P3 dryback" } },
+      "shot_volume": { "name": "Shot volume" },
+      "weight": { "name": "Weight" },
+      "reservoir_pct": { "name": "Reservoir" },
+      "reservoir_liters": { "name": "Reservoir liters" },
+      "light_elapsed_pct": { "name": "Light progress" },
+      "light_remaining": { "name": "Light remaining" },
+      "brightness_pct": { "name": "Brightness" },
+      "reservoir_status": { "name": "Reservoir status", "state": { "ok": "OK", "low": "Low", "critical": "Critical" } },
+      "ec": { "name": "EC" },
+      "ph": { "name": "pH" },
+      "water_temp": { "name": "Water temperature" },
+      "phase": { "name": "Phase", "state": { "clone": "Clone", "veg": "Veg", "stretch": "Stretch", "bulk": "Bulk", "ripen": "Ripen", "drying": "Drying" } },
+      "day_total": { "name": "Day total" },
+      "day_in_phase": { "name": "Day in phase" },
+      "week_in_phase": { "name": "Week in phase" },
+      "flower_day": { "name": "Flower day" },
+      "diary_count": { "name": "Diary entries" },
+      "test_status": { "name": "Setup test", "state": { "pass": "Passed", "warning": "Warning", "fail": "Failed", "running": "Running" } },
+      "comparison": { "name": "Comparison" },
+      "next_training_event": { "name": "Next training event", "state": { "lollipopping": "Lollipopping", "defoliation_1": "Defoliation 1", "defoliation_2": "Defoliation 2", "flush": "Flush", "harvest_check": "Harvest check" } },
+      "nutrient_recommendation": { "name": "Nutrient recommendation", "state": { "increase_ec": "Increase EC", "keep_ec": "Keep EC", "reduce_ec": "Reduce EC", "flush": "Flush recommended", "check_roots": "Check roots" } },
+      "energy_total_kwh": { "name": "Energy total" },
+      "energy_cost_eur": { "name": "Energy cost" },
+      "daily_cost_eur": { "name": "Daily cost" },
+      "cost_per_gram": { "name": "Cost per gram" }
+    },
+    "binary_sensor": {
+      "flower_switch_due": { "name": "Flower switch due" }
+    },
+    "select": {
+      "phase": { "name": "Phase", "state": { "clone": "Clone", "veg": "Veg", "stretch": "Stretch", "bulk": "Bulk", "ripen": "Ripen", "drying": "Drying" } },
+      "compare_a": { "name": "Compare A" },
+      "compare_b": { "name": "Compare B" }
+    },
+    "number": {
+      "photoperiod": { "name": "Photoperiod (veg)" },
+      "flower_photoperiod": { "name": "Photoperiod (flower)" },
+      "leaf_offset": { "name": "Leaf temperature offset" },
+      "power_price": { "name": "Power price" },
+      "container_size": { "name": "Container size" },
+      "tank_volume": { "name": "Reservoir volume" },
+      "flower_postpone_days": { "name": "Flower postpone (days)" },
+      "runoff_ec_input": { "name": "Runoff EC (input)" },
+      "runoff_ph_input": { "name": "Runoff pH (input)" },
+      "runoff_volume_input": { "name": "Runoff volume (input)" },
+      "runoff_ppm_input": { "name": "Runoff PPM (input)" },
+      "harvest_wet_input": { "name": "Wet weight (input)" },
+      "harvest_dry_input": { "name": "Dry weight (input)" },
+      "harvest_extra_input": { "name": "Extra cost (input)" },
+      "ppfd_at_full": { "name": "PPFD at 100%" },
+      "ppfd_ref_distance": { "name": "PPFD calibration distance" },
+      "light_distance": { "name": "Light distance (current)" },
+      "ppfd_manual": { "name": "PPFD manual" }
+    },
+    "button": {
+      "advance_phase": { "name": "Advance phase" },
+      "reset_dryback": { "name": "Reset dryback" },
+      "calibrate_field_capacity": { "name": "Calibrate Field Capacity" },
+      "calibrate_dry_weight": { "name": "Calibrate Dry Weight" },
+      "calibrate_reservoir_empty": { "name": "Calibrate Reservoir Empty" },
+      "calibrate_reservoir_full": { "name": "Calibrate Reservoir Full" },
+      "submit_runoff": { "name": "Submit runoff" },
+      "submit_harvest": { "name": "Submit harvest" },
+      "export_csv": { "name": "Export CSV" },
+      "save_diary": { "name": "Save diary" },
+      "test_setup": { "name": "Test setup" },
+      "test_pump": { "name": "Test pump" },
+      "archive_grow": { "name": "Archive grow" },
+      "compare_grows": { "name": "Compare grows" },
+      "confirm_flower_switch": { "name": "Confirm flower switch" },
+      "postpone_flower_switch": { "name": "Postpone flower switch" }
+    },
+    "text": {
+      "diary_comment": { "name": "Diary comment" },
+      "diary_image": { "name": "Diary image (path/URL)" }
+    }
+  }
+}

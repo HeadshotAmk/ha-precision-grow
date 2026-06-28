@@ -1,0 +1,98 @@
+blueprint:
+  name: Precision Grow — Dryback irrigation
+  description: >
+    Trigger an irrigation shot when dryback reaches a target — but only during
+    the daytime phases P1 (ramp) and P2 (maintenance).
+    No irrigation in P0 (night) or P3 (dryback before lights-off).
+    One shot = pump on for the configured duration.
+  domain: automation
+  author: HeadshotAmk
+  input:
+    dryback_sensor:
+      name: Dryback sensor
+      description: sensor.<grow>_dryback_pct
+      selector:
+        entity:
+          filter:
+            - integration: precision_grow
+    p_phase_sensor:
+      name: P-phase sensor
+      description: sensor.<grow>_p_phase
+      selector:
+        entity:
+          filter:
+            - integration: precision_grow
+    pump:
+      name: Irrigation pump
+      selector:
+        entity:
+          filter:
+            - domain: [switch]
+    dryback_trigger:
+      name: Dryback trigger threshold (%)
+      description: A shot is triggered above this dryback value.
+      default: 15
+      selector:
+        number:
+          min: 1
+          max: 60
+          step: 1
+          unit_of_measurement: "%"
+          mode: slider
+    shot_duration:
+      name: Shot duration (seconds)
+      description: How long the pump runs per shot.
+      default: 10
+      selector:
+        number:
+          min: 1
+          max: 600
+          step: 1
+          unit_of_measurement: s
+          mode: box
+    min_interval:
+      name: Minimum interval between shots (minutes)
+      default: 30
+      selector:
+        number:
+          min: 1
+          max: 240
+          step: 1
+          unit_of_measurement: min
+          mode: box
+
+mode: single
+max_exceeded: silent
+
+variables:
+  pump: !input pump
+  shot_duration: !input shot_duration
+  min_interval: !input min_interval
+
+trigger:
+  - platform: numeric_state
+    entity_id: !input dryback_sensor
+    above: !input dryback_trigger
+
+condition:
+  # only irrigate in P1 / P2
+  - condition: state
+    entity_id: !input p_phase_sensor
+    state:
+      - "P1"
+      - "P2"
+  # enforce minimum interval since last run
+  - condition: template
+    value_template: >
+      {% set lt = this.attributes.last_triggered %}
+      {{ lt is none or (now() - lt).total_seconds() / 60 >= min_interval | float }}
+
+action:
+  - service: homeassistant.turn_on
+    target:
+      entity_id: "{{ pump }}"
+  - delay:
+      seconds: "{{ shot_duration | int }}"
+  - service: homeassistant.turn_off
+    target:
+      entity_id: "{{ pump }}"

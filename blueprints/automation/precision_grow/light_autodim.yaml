@@ -1,0 +1,82 @@
+blueprint:
+  name: Precision Grow — Auto-dim per phase
+  description: >
+    Sets the brightness of a dimmable light (e.g. Mars Hydro FC) to match the
+    current growth phase. Reacts to phase changes and re-checks on restart/daily.
+    Brightness per phase is freely configurable.
+  domain: automation
+  author: HeadshotAmk
+  input:
+    phase_sensor:
+      name: Phase sensor
+      description: sensor.<grow>_phase
+      selector:
+        entity:
+          filter:
+            - integration: precision_grow
+    light:
+      name: Light (dimmable)
+      selector:
+        entity:
+          filter:
+            - domain: [light]
+    b_clone:
+      name: Brightness clone (%)
+      default: 40
+      selector: { number: { min: 0, max: 100, step: 5, unit_of_measurement: "%", mode: slider } }
+    b_veg:
+      name: Brightness veg (%)
+      default: 70
+      selector: { number: { min: 0, max: 100, step: 5, unit_of_measurement: "%", mode: slider } }
+    b_stretch:
+      name: Brightness stretch (%)
+      default: 85
+      selector: { number: { min: 0, max: 100, step: 5, unit_of_measurement: "%", mode: slider } }
+    b_bulk:
+      name: Brightness bulk (%)
+      default: 100
+      selector: { number: { min: 0, max: 100, step: 5, unit_of_measurement: "%", mode: slider } }
+    b_ripen:
+      name: Brightness ripen (%)
+      default: 80
+      selector: { number: { min: 0, max: 100, step: 5, unit_of_measurement: "%", mode: slider } }
+    b_drying:
+      name: Brightness drying (%)
+      default: 0
+      selector: { number: { min: 0, max: 100, step: 5, unit_of_measurement: "%", mode: slider } }
+
+mode: single
+
+variables:
+  light: !input light
+  phase_sensor: !input phase_sensor
+  brightness_map:
+    clone: !input b_clone
+    veg: !input b_veg
+    stretch: !input b_stretch
+    bulk: !input b_bulk
+    ripen: !input b_ripen
+    drying: !input b_drying
+
+trigger:
+  - platform: state
+    entity_id: !input phase_sensor
+  - platform: homeassistant
+    event: start
+  - platform: time
+    at: "00:10:00"
+
+action:
+  - variables:
+      target_pct: "{{ brightness_map.get(states(phase_sensor), 0) | int }}"
+  - if: "{{ target_pct > 0 }}"
+    then:
+      - service: light.turn_on
+        target:
+          entity_id: "{{ light }}"
+        data:
+          brightness_pct: "{{ target_pct }}"
+    else:
+      - service: light.turn_off
+        target:
+          entity_id: "{{ light }}"

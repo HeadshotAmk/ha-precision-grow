@@ -1,0 +1,78 @@
+blueprint:
+  name: Precision Grow — Reservoir alert
+  description: >
+    Notifies when the reservoir status changes to "low" or "critical"
+    (push + persistent banner). Dismisses the banner once back to "ok".
+  domain: automation
+  author: HeadshotAmk
+  input:
+    reservoir_status_sensor:
+      name: Reservoir status sensor
+      description: sensor.<grow>_reservoir_status
+      selector:
+        entity:
+          filter:
+            - integration: precision_grow
+    reservoir_liters_sensor:
+      name: Reservoir liters sensor (optional, for text)
+      default: ""
+      selector:
+        entity:
+          filter:
+            - integration: precision_grow
+    notify_service:
+      name: Notify service (optional)
+      default: ""
+      selector:
+        text:
+
+mode: single
+
+variables:
+  reservoir_status_sensor: !input reservoir_status_sensor
+  reservoir_liters_sensor: !input reservoir_liters_sensor
+  notify_service: !input notify_service
+
+trigger:
+  - platform: state
+    entity_id: !input reservoir_status_sensor
+    to:
+      - low
+      - critical
+    id: alert
+  - platform: state
+    entity_id: !input reservoir_status_sensor
+    to: ok
+    id: clear
+
+action:
+  - choose:
+      - conditions:
+          - condition: trigger
+            id: alert
+        sequence:
+          - variables:
+              level: "{{ states(reservoir_status_sensor) }}"
+              liters: >-
+                {{ states(reservoir_liters_sensor) if reservoir_liters_sensor not in ['', none] else '?' }}
+              title: >-
+                {{ '🚨 Reservoir CRITICAL' if level == 'critical' else '⚠️ Reservoir low' }}
+              message: "Level {{ level }} ({{ liters }} L) — please refill."
+          - service: persistent_notification.create
+            data:
+              notification_id: "precision_grow_reservoir_{{ reservoir_status_sensor }}"
+              title: "{{ title }}"
+              message: "{{ message }}"
+          - if: "{{ notify_service not in ['', none] }}"
+            then:
+              - service: "{{ notify_service }}"
+                data:
+                  title: "{{ title }}"
+                  message: "{{ message }}"
+      - conditions:
+          - condition: trigger
+            id: clear
+        sequence:
+          - service: persistent_notification.dismiss
+            data:
+              notification_id: "precision_grow_reservoir_{{ reservoir_status_sensor }}"

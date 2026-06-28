@@ -1,0 +1,118 @@
+blueprint:
+  name: Precision Grow — Phase scheduler & light schedule
+  description: >
+    Keeps the light in sync with the photoperiod (switch follows the light_on
+    status of the integration) and can optionally switch automatically from veg
+    to flower (stretch) once the vegetation time is reached.
+    Finer phase changes (stretch->bulk->ripen) stay manual on purpose.
+  domain: automation
+  author: HeadshotAmk
+  input:
+    light_progress_sensor:
+      name: Light progress sensor
+      description: sensor.<grow>_light_progress (carries the light_on attribute)
+      selector:
+        entity:
+          filter:
+            - integration: precision_grow
+    light_switch:
+      name: Light (switch, optional)
+      default: ""
+      selector:
+        entity:
+          filter:
+            - domain: [switch, light]
+    phase_select:
+      name: Phase select
+      description: select.<grow>_phase
+      selector:
+        entity:
+          filter:
+            - integration: precision_grow
+              domain: select
+    day_total_sensor:
+      name: Day total sensor
+      description: sensor.<grow>_day_total
+      selector:
+        entity:
+          filter:
+            - integration: precision_grow
+    auto_flip:
+      name: Enable auto-flip veg -> flower
+      default: false
+      selector:
+        boolean:
+    veg_days:
+      name: Vegetation time (days)
+      description: From this total day, switch to stretch.
+      default: 28
+      selector:
+        number:
+          min: 1
+          max: 120
+          step: 1
+          unit_of_measurement: d
+          mode: box
+    notify_service:
+      name: Notify service (optional)
+      default: ""
+      selector:
+        text:
+
+mode: queued
+max: 10
+
+variables:
+  light_switch: !input light_switch
+  phase_select: !input phase_select
+  day_total_sensor: !input day_total_sensor
+  auto_flip: !input auto_flip
+  veg_days: !input veg_days
+  notify_service: !input notify_service
+
+trigger:
+  - platform: state
+    entity_id: !input light_progress_sensor
+    attribute: light_on
+    id: light
+  - platform: time
+    at: "00:05:00"
+    id: flip_check
+
+action:
+  - choose:
+      # ----- Light schedule: switch follows light_on -----
+      - conditions:
+          - condition: trigger
+            id: light
+          - "{{ light_switch not in ['', none] }}"
+        sequence:
+          - if: "{{ trigger.to_state.attributes.light_on }}"
+            then:
+              - service: homeassistant.turn_on
+                target:
+                  entity_id: "{{ light_switch }}"
+            else:
+              - service: homeassistant.turn_off
+                target:
+                  entity_id: "{{ light_switch }}"
+      # ----- Auto-flip veg -> stretch -----
+      - conditions:
+          - condition: trigger
+            id: flip_check
+          - "{{ auto_flip }}"
+          - "{{ states(phase_select) == 'veg' }}"
+          - "{{ states(day_total_sensor) | int(0) >= veg_days | int }}"
+        sequence:
+          - service: select.select_option
+            target:
+              entity_id: "{{ phase_select }}"
+            data:
+              option: stretch
+          - if: "{{ notify_service not in ['', none] }}"
+            then:
+              - service: "{{ notify_service }}"
+                data:
+                  title: "🌱 Phase change"
+                  message: >-
+                    Vegetation time reached ({{ veg_days }} days) — switched to stretch/flower.

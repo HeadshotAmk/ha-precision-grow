@@ -1,0 +1,83 @@
+blueprint:
+  name: Precision Grow — Training reminders
+  description: >
+    Reminds you of the next training/harvest event (lollipopping, defoliation,
+    flush, harvest check) via push and a persistent dashboard banner.
+    Reads the next_training_event sensor and its in_days attribute.
+    Checks daily at the configured time and on event change.
+  domain: automation
+  author: HeadshotAmk
+  input:
+    event_sensor:
+      name: Training event sensor
+      description: sensor.<grow>_next_training_event
+      selector:
+        entity:
+          filter:
+            - integration: precision_grow
+    notify_service:
+      name: Notify service
+      description: e.g. notify.mobile_app_your_phone (empty = dashboard banner only)
+      default: ""
+      selector:
+        text:
+    lead_days:
+      name: Lead time (days)
+      description: How many days ahead to remind.
+      default: 3
+      selector:
+        number:
+          min: 0
+          max: 14
+          step: 1
+          unit_of_measurement: d
+          mode: slider
+    check_time:
+      name: Daily check time
+      default: "08:00:00"
+      selector:
+        time:
+
+mode: single
+
+variables:
+  event_sensor: !input event_sensor
+  notify_service: !input notify_service
+  lead_days: !input lead_days
+
+trigger:
+  - platform: time
+    at: !input check_time
+    id: daily
+  - platform: state
+    entity_id: !input event_sensor
+    id: changed
+
+condition:
+  - condition: template
+    value_template: >
+      {{ states(event_sensor) not in ['unknown', 'unavailable', 'none', none] }}
+  - condition: template
+    value_template: >
+      {% set d = state_attr(event_sensor, 'in_days') %}
+      {{ d is not none and (d | int(99)) <= lead_days | int }}
+
+action:
+  - variables:
+      event_name: "{{ states(event_sensor) }}"
+      days: "{{ state_attr(event_sensor, 'in_days') | int(0) }}"
+      grow: "{{ device_attr(device_id(event_sensor), 'name') or 'Grow' }}"
+      when_text: "{{ 'today' if days == 0 else 'tomorrow' if days == 1 else 'in ' ~ days ~ ' days' }}"
+      title: "🌱 {{ grow }}: {{ event_name }} {{ when_text }}"
+      message: "Upcoming event: {{ event_name }} ({{ when_text }})."
+  - service: persistent_notification.create
+    data:
+      notification_id: "precision_grow_training_{{ event_sensor }}"
+      title: "{{ title }}"
+      message: "{{ message }}"
+  - if: "{{ notify_service not in ['', none] }}"
+    then:
+      - service: "{{ notify_service }}"
+        data:
+          title: "{{ title }}"
+          message: "{{ message }}"
