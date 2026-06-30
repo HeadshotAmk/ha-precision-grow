@@ -1,7 +1,7 @@
 {
   "domain": "precision_grow",
   "name": "Precision Grow",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "documentation": "https://github.com/HeadshotAmk/ha-precision-grow",
   "issue_tracker": "https://github.com/HeadshotAmk/ha-precision-grow/issues",
   "codeowners": ["@HeadshotAmk"],
