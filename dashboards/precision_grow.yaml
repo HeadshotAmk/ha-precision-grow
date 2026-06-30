@@ -96,29 +96,34 @@ views:
             icon_color: >-
               {{ 'amber' if is_state_attr('sensor.grow1_light_progress','light_on', true) else 'blue-grey' }}
           - type: custom:apexcharts-card
-            chart_type: bar
+            chart_type: radialBar
             header:
-              show: false
+              show: true
+              title: Light progress
             apex_config:
               chart:
-                height: 70
-                sparkline:
-                  enabled: true
+                height: 170
               plotOptions:
-                bar:
-                  horizontal: true
-                  borderRadius: 6
-              dataLabels:
-                enabled: true
-                formatter: |
-                  EVAL:function(val){ return Math.round(val) + ' %'; }
-              xaxis:
-                max: 100
-              tooltip:
-                enabled: false
+                radialBar:
+                  startAngle: -90
+                  endAngle: 90
+                  dataLabels:
+                    name:
+                      show: false
+                    value:
+                      formatter: |
+                        EVAL:function(val){ return Math.round(val) + ' %'; }
             series:
               - entity: sensor.grow1_light_progress
-                name: Light progress
+                name: Elapsed
+                min: 0
+                max: 100
+          - type: entities
+            title: Light schedule
+            entities:
+              - entity: time.grow1_lights_on
+              - entity: number.grow1_photoperiod_veg
+              - entity: number.grow1_photoperiod_flower
 
       # ===== Climate grid =====
       - type: custom:mushroom-template-card
@@ -159,37 +164,36 @@ views:
               DLI {{ states('sensor.grow1_dli') }} / {{ state_attr('sensor.grow1_dli','target_max') }} mol
             secondary: >-
               PPFD {{ states('sensor.grow1_ppfd') }} µmol ({{ state_attr('sensor.grow1_ppfd','source') }}) ·
-              Brightness {{ states('sensor.grow1_brightness_pct') }} %
+              Brightness {{ states('sensor.grow1_brightness') }} %
             icon: mdi:sun-wireless
             icon_color: >-
               {% set s = states('sensor.grow1_dli_status') %}
               {{ 'green' if s == 'optimal' else 'red' if s == 'high' else 'amber' }}
             multiline_secondary: true
           - type: custom:apexcharts-card
-            chart_type: bar
+            chart_type: radialBar
             header:
-              show: false
+              show: true
+              title: DLI vs target
             apex_config:
               chart:
-                height: 60
-                sparkline:
-                  enabled: true
+                height: 170
               plotOptions:
-                bar:
-                  horizontal: true
-                  borderRadius: 6
-              dataLabels:
-                enabled: true
-                formatter: |
-                  EVAL:function(val){ return Math.round(val) + ' % of target'; }
-              xaxis:
-                max: 100
-              tooltip:
-                enabled: false
+                radialBar:
+                  startAngle: -90
+                  endAngle: 90
+                  dataLabels:
+                    name:
+                      show: false
+                    value:
+                      formatter: |
+                        EVAL:function(val){ return Math.round(val) + ' %'; }
             series:
               - entity: sensor.grow1_dli
-                name: DLI target
+                name: Of target
                 attribute: percent_of_target
+                min: 0
+                max: 100
 
       # ===== VPD/temp/RH 24h history =====
       - type: custom:apexcharts-card
@@ -497,13 +501,13 @@ views:
         square: false
         cards:
           - type: custom:mushroom-number-card
-            entity: number.grow1_harvest_wet_input
+            entity: number.grow1_wet_weight_input
             display_mode: buttons
           - type: custom:mushroom-number-card
-            entity: number.grow1_harvest_dry_input
+            entity: number.grow1_dry_weight_input
             display_mode: buttons
           - type: custom:mushroom-number-card
-            entity: number.grow1_harvest_extra_input
+            entity: number.grow1_extra_cost_input
             display_mode: buttons
           - type: custom:mushroom-entity-card
             entity: button.grow1_submit_harvest
@@ -550,7 +554,7 @@ views:
       - type: entities
         entities:
           - entity: text.grow1_diary_comment
-          - entity: text.grow1_diary_image
+          - entity: text.grow1_diary_image_path_url
       - type: custom:mushroom-entity-card
         entity: button.grow1_save_diary
         icon: mdi:notebook-plus
@@ -558,7 +562,7 @@ views:
         primary_info: name
       - type: markdown
         content: >-
-          {% for e in state_attr('sensor.grow1_diary_count','entries') or [] %}
+          {% for e in state_attr('sensor.grow1_diary_entries','entries') or [] %}
           ### {{ e.date }} — {{ e.snapshot.phase }} (day {{ e.snapshot.day_total }}, flower {{ e.snapshot.flower_day }})
 
           {% if e.comment %}{{ e.comment }}
@@ -606,7 +610,7 @@ views:
         title: Targets & parameters
       - type: entities
         entities:
-          - entity: number.grow1_photoperiod
+          - entity: number.grow1_photoperiod_veg
           - entity: number.grow1_leaf_temperature_offset
           - entity: number.grow1_power_price
           - entity: number.grow1_container_size
@@ -641,11 +645,11 @@ views:
         title: Test my Setup
       - type: custom:mushroom-template-card
         primary: >-
-          Setup test: {{ states('sensor.grow1_test_status') }}
+          Setup test: {{ states('sensor.grow1_setup_test') }}
         secondary: Measure and validate sensors + devices
         icon: mdi:clipboard-check
         icon_color: >-
-          {% set s = states('sensor.grow1_test_status') %}
+          {% set s = states('sensor.grow1_setup_test') %}
           {{ 'green' if s == 'pass' else 'red' if s == 'fail' else 'amber' if s == 'warning' else 'grey' }}
         tap_action:
           action: call-service
@@ -672,8 +676,8 @@ views:
               the tent will be flooded! Test the pump now?
       - type: markdown
         content: >-
-          {% set r = state_attr('sensor.grow1_test_status','sensors') %}
-          {% set d = state_attr('sensor.grow1_test_status','devices') %}
+          {% set r = state_attr('sensor.grow1_setup_test','sensors') %}
+          {% set d = state_attr('sensor.grow1_setup_test','devices') %}
           {% if r %}**Sensors**
 
           {% for k, v in r.items() %}- {{ k }}: {{ v }}

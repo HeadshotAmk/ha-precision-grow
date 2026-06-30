@@ -141,6 +141,8 @@ Replace the `grow1` prefix with your grow's slug.
   still leave a device on — for the pump this is flooding-relevant, so always place the
   sprinklers in a container before running the pump test (the service warns you) and keep
   the duration short.
+- **No release tag yet:** install via the HACS default branch until a tagged GitHub
+  release is published.
 - **Single instance per grow:** no `unique_id` duplicate detection — this is intentional
   to allow multiple grows.
 - **Cloud light (e.g. Mars Hydro):** if you map a cloud-based light, automations depend

@@ -241,6 +241,9 @@
     "binary_sensor": {
       "flower_switch_due": { "name": "Flower switch due" }
     },
+    "time": {
+      "lights_on": { "name": "Lights on" }
+    },
     "select": {
       "phase": { "name": "Phase", "state": { "clone": "Clone", "veg": "Veg", "stretch": "Stretch", "bulk": "Bulk", "ripen": "Ripen", "drying": "Drying" } },
       "compare_a": { "name": "Compare A" },

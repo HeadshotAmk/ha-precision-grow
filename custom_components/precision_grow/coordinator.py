@@ -151,6 +151,8 @@ class PrecisionGrowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "flower_start_date": None,
             # Flower switch (regular): accumulated postpone days
             "veg_extended_days": 0,
+            # Lights-on time override set via the time entity (HH:MM:SS)
+            "lights_on_override": None,
         }
 
     # ------------------------------------------------------------------ #
@@ -212,6 +214,18 @@ class PrecisionGrowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     @property
     def phase(self) -> str:
         return self.state["phase"]
+
+    def lights_on(self) -> str:
+        """Configured lights-on time (HH:MM:SS), overridable via the time entity."""
+        override = self.state.get("lights_on_override")
+        if override:
+            return override
+        return self._opt(CONF_LIGHTS_ON, DEFAULT_LIGHTS_ON)
+
+    async def async_set_lights_on(self, value: str) -> None:
+        self.state["lights_on_override"] = value
+        await self.async_save_state()
+        await self.async_request_refresh()
 
     def effective_photoperiod(self, phase: str) -> float:
         """Photoperiod depending on plant type/phase.
@@ -343,7 +357,7 @@ class PrecisionGrowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
     def _p_phase(self, photoperiod: float) -> str:
         """Current irrigation day phase P0-P3 from the light schedule."""
-        lights_on = self._opt(CONF_LIGHTS_ON, DEFAULT_LIGHTS_ON)
+        lights_on = self.lights_on()
         try:
             parts = [int(x) for x in str(lights_on).split(":")]
             on_minutes = parts[0] * 60 + (parts[1] if len(parts) > 1 else 0)
@@ -358,7 +372,7 @@ class PrecisionGrowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
     def _light_status(self, photoperiod: float) -> dict[str, Any]:
         """Light on/off, elapsed %, remaining time, on/off time."""
-        lights_on = self._opt(CONF_LIGHTS_ON, DEFAULT_LIGHTS_ON)
+        lights_on = self.lights_on()
         try:
             p = [int(x) for x in str(lights_on).split(":")]
             on_min = p[0] * 60 + (p[1] if len(p) > 1 else 0)

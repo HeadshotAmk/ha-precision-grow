@@ -9,7 +9,9 @@ import math
 from typing import Final
 
 DOMAIN: Final = "precision_grow"
-PLATFORMS: Final = ["sensor", "binary_sensor", "select", "number", "button", "text"]
+PLATFORMS: Final = [
+    "sensor", "binary_sensor", "select", "number", "button", "text", "time"
+]
 
 # Diary input fields (text)
 TEXT_DIARY_COMMENT: Final = "diary_comment"
