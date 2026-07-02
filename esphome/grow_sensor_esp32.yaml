@@ -1,9 +1,10 @@
 # Precision Grow — ESP32 D1 Mini sensor node
-# SHT31 (temp/RH) + HX711 (load cell/dryback) + VL53L0X (reservoir, ToF)
-# + float switch (humidifier tank empty)
+# SHT31 (temp/RH) + HX711 (2x 10kg load cells / dryback)
+# + JSN-SR04T (reservoir, ultrasonic) + float switch (humidifier tank empty)
 #
-# Reservoir: VL53L0X reports distance in mm. The integration calibrates
+# Reservoir: JSN-SR04T reports distance in mm. The integration calibrates
 # 2-point (empty/full) via the buttons — NO % conversion needed here.
+# (Ultrasonic is used instead of a laser ToF sensor, which reads water poorly.)
 
 substitutions:
   node_name: grow-sensor-esp32
@@ -34,7 +35,7 @@ wifi:
 
 captive_portal:
 
-# --- I2C for SHT31 + VL53L0X ---
+# --- I2C for SHT31 ---
 i2c:
   sda: GPIO21
   scl: GPIO22
@@ -54,6 +55,8 @@ sensor:
       id: grow_humidity
 
   # Load cell (dryback) — HX711
+  # Two 10 kg half-bridge cells wire into ONE full bridge on a single HX711
+  # (E+/E- across the pair, A+/A- to the two signal wires). One weight value.
   - platform: hx711
     name: "${friendly_name} Weight"
     id: grow_weight
@@ -73,15 +76,19 @@ sensor:
           window_size: 5
           send_every: 5
 
-  # Reservoir level (VL53L0X, distance in mm)
-  - platform: vl53l0x
+  # Reservoir level (JSN-SR04T ultrasonic, distance in mm)
+  # NOTE: JSN-SR04T echo is 5 V — use a voltage divider on the echo pin
+  # (e.g. 1k/2k) for the 3.3 V ESP32. Blind zone ~25 cm, so mount the sensor
+  # at least ~25 cm above the full water level.
+  - platform: ultrasonic
+    trigger_pin: GPIO5
+    echo_pin: GPIO18
     name: "${friendly_name} Reservoir distance"
     id: grow_reservoir
-    address: 0x29
     update_interval: 30s
     unit_of_measurement: "mm"
     accuracy_decimals: 0
-    long_range: true
+    timeout: 2.0m
     filters:
       - multiply: 1000.0   # m -> mm
       - sliding_window_moving_average:

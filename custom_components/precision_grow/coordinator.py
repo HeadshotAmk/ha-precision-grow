@@ -143,7 +143,7 @@ class PrecisionGrowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "last_weight": None,         # previous weight (for rate)
             "last_weight_ts": None,
             "ema_transpiration": None,   # smoothed transpiration g/h
-            # Reservoir calibration (VL53L0X distance mm)
+            # Reservoir calibration (ultrasonic/ToF distance mm)
             "res_dist_empty": None,
             "res_dist_full": None,
             # Phase timestamps
@@ -586,7 +586,7 @@ class PrecisionGrowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             round(pot_ml * RUNOFF_TARGET_GEN_PCT[1] / 100.0),
         )
 
-        # --- Reservoir (VL53L0X distance -> % -> L, or direct %) ---
+        # --- Reservoir (ultrasonic/ToF distance -> % -> L, or direct %) ---
         if reservoir is not None:
             d_empty = self.state.get("res_dist_empty")
             d_full = self.state.get("res_dist_full")

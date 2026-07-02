@@ -68,9 +68,10 @@ Alternatively set **PPFD manual**. Priority: real PAR sensor → estimate → ma
 
 ## 7. ESPHome (optional reference hardware)
 
-See [`esphome/README.md`](../esphome/README.md). One ESP32 carries SHT31, HX711 load
-cell, VL53L0X (reservoir) and a float switch. The VL53L0X reports distance in mm; calibrate
-empty/full from the integration's buttons.
+See [`esphome/README.md`](../esphome/README.md). One ESP32 carries SHT31, HX711
+(2× 10 kg load cells), a JSN-SR04T ultrasonic reservoir sensor and a float switch.
+The JSN-SR04T reports distance in mm; calibrate empty/full from the integration's
+buttons. (The pump runs on a separate Shelly Plug S, mapped as the pump device.)
 
 ## 8. Blueprints
 

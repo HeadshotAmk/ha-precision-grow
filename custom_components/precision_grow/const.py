@@ -464,9 +464,9 @@ def analyze_runoff(
 def reservoir_pct_from_distance(
     distance: float, dist_empty: float, dist_full: float
 ) -> float | None:
-    """Reservoir % from VL53L0X distance (mm) via 2-point calibration.
+    """Reservoir % from an ultrasonic/ToF distance (mm) via 2-point calibration.
 
-    dist_empty = große Distanz (leer), dist_full = kleine Distanz (voll).
+    dist_empty = large distance (empty), dist_full = small distance (full).
     """
     span = dist_empty - dist_full
     if span <= 0:

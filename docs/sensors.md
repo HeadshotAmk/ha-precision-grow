@@ -38,7 +38,7 @@ device name + entity name (examples below use the `grow1` prefix).
 ### Reservoir
 | Entity | Unit | Notes |
 |---|---|---|
-| `reservoir_pct` | % | from VL53L0X distance via 2-point calibration |
+| `reservoir_pct` | % | from ultrasonic (JSN-SR04T) distance via 2-point calibration |
 | `reservoir_liters` | L | `reservoir_pct × tank volume` |
 | `reservoir_status` | enum | ok / low / critical |
 

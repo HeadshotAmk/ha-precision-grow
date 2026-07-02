@@ -32,7 +32,7 @@ automation blueprints and a complete Mushroom + ApexCharts dashboard.
 - **Nutrients:** manual runoff entry → EC/pH trend analysis and a nutrient
   recommendation (increase / keep / reduce EC, flush, check roots)
 - **Energy & cost:** kWh per device, running cost, daily cost, and €/g after harvest
-- **Reservoir:** VL53L0X distance → % and liters via 2-point calibration, low/critical alerts
+- **Reservoir:** ultrasonic (JSN-SR04T) distance → % and liters via 2-point calibration, low/critical alerts
 - **Grow diary:** automatic daily value snapshots + your comment and photo per day,
   stored on your Synology with on-device thumbnails
 - **Archive, clone & A/B compare:** archive a finished grow to your NAS, clone any
@@ -62,7 +62,7 @@ Manual install: copy `custom_components/precision_grow` into your `config/custom
 3. **Strain:** type a name for automatic metadata (Cannlytics, no key) or skip; then confirm
    **plant type (regular/auto)**, **veg/flower time**, THC/CBD.
 4. **Map your sensors and devices** (all optional): temperature, humidity, weight (HX711),
-   reservoir distance (VL53L0X), CO₂, PPFD, EC, pH, light brightness, plus heater, cooler,
+   reservoir distance (JSN-SR04T ultrasonic), CO₂, PPFD, EC, pH, light brightness, plus heater, cooler,
    humidifier, pump, light, exhaust, …
 5. **Storage:** set the media base path (e.g. your Synology mount `/media/synology`).
 6. Import the **blueprints** you want and add the **dashboard**.
@@ -80,7 +80,7 @@ All sensors on a single ESP32 (see [`esphome/`](esphome/)):
 |---|---|---|
 | SHT31 | I²C 0x44 | Temperature + humidity |
 | HX711 + load cell | DOUT/CLK | Weight → dryback / transpiration |
-| VL53L0X (ToF) | I²C 0x29 | Reservoir level (distance → % → L) |
+| JSN-SR04T (ultrasonic) | trigger/echo | Reservoir level (distance → % → L) |
 | Float switch | GPIO | Humidifier tank empty |
 
 The integration is device-agnostic — any sensor/switch entity works. Example: a
