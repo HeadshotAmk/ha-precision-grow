@@ -154,6 +154,16 @@ PHASES: Final = [
 # Irrigation phases (daily cycle)
 P_PHASES: Final = ["P0", "P1", "P2", "P3"]
 
+# Default phase durations (days) for the phase-switch reminder (Athena-style
+# schedule). veg is handled separately via veg_days + flower-switch confirm.
+# Override per grow via options["phase_days"][phase].
+PHASE_DEFAULT_DAYS: Final = {
+    PHASE_CLONE: 14,
+    PHASE_STRETCH: 21,
+    PHASE_DRYING: 14,
+}
+RIPEN_LEAD_DAYS: Final = 14  # ripen = last N days of flowering
+
 # Recommended brightness per phase (%) — defaults for the auto-dim blueprint
 PHASE_BRIGHTNESS: Final = {
     PHASE_CLONE: 40,
@@ -272,12 +282,12 @@ ROCKWOOL_TYPES: Final = [
     "sw_15cm_mat",
 ]
 
-RUNOFF_TARGET_VEG_PCT: Final = (8, 16)   # 8-16 % des Topfvolumens
-RUNOFF_TARGET_GEN_PCT: Final = (1, 7)    # 1-7 % des Topfvolumens
+RUNOFF_TARGET_VEG_PCT: Final = (8, 16)   # 8-16 % of the pot volume
+RUNOFF_TARGET_GEN_PCT: Final = (1, 7)    # 1-7 % of the pot volume
 
 # --------------------------------------------------------------------------- #
 # Nutrient presets — EC targets per week, pH per phase
-#   ec_by_week: {Woche: EC mS/cm}
+#   ec_by_week: {week: EC mS/cm}
 #   ph_by_phase: {Phase: pH}
 # --------------------------------------------------------------------------- #
 NUTRIENT_PROFILES: Final = {
@@ -377,11 +387,12 @@ def calculate_svp(temp_c: float) -> float:
 
 def calculate_vpd(temp_c: float, rh: float) -> float:
     """Room VPD (kPa)."""
+    rh = min(100.0, max(0.0, rh))
     return calculate_svp(temp_c) * (1.0 - rh / 100.0)
 
 
 def calculate_lvpd(temp_c: float, rh: float, leaf_offset: float = DEFAULT_LEAF_OFFSET) -> float:
-    """Leaf VPD (kPa), Blatttemperatur = Lufttemperatur - offset."""
+    """Leaf VPD (kPa), leaf temperature = air temperature - offset."""
     t_leaf = temp_c - leaf_offset
     svp_leaf = calculate_svp(t_leaf)
     svp_air = calculate_svp(temp_c)
@@ -389,11 +400,11 @@ def calculate_lvpd(temp_c: float, rh: float, leaf_offset: float = DEFAULT_LEAF_O
 
 
 def calculate_dryback(current_weight: float, peak_weight: float, trough_weight: float) -> float:
-    """Dryback in % relativ zur Tages-Spanne (Peak - Trough)."""
+    """Dryback in % relative to the daily span (peak - trough)."""
     span = peak_weight - trough_weight
     if span <= 0:
         return 0.0
-    return ((peak_weight - current_weight) / span) * 100.0
+    return max(0.0, ((peak_weight - current_weight) / span) * 100.0)
 
 
 def calculate_dli(ppfd: float, photoperiod_hours: float) -> float:
@@ -480,7 +491,7 @@ def determine_p_phase(
 ) -> str:
     """Irrigation day phase P0-P3 based on the light schedule.
 
-    P0 = Nacht, P1 = Aufbau-Rampe, P2 = Maintenance, P3 = Dryback vor Lichtende.
+    P0 = night, P1 = ramp-up, P2 = maintenance, P3 = dryback before lights-off.
     minutes_since_lights_on = None -> lights off (P0).
     """
     if minutes_since_lights_on is None:
@@ -493,7 +504,7 @@ def determine_p_phase(
 
 
 def next_training_event(flower_day: int, flower_days_total: int) -> dict | None:
-    """Nächstes Training-/Ernte-Event ab aktuellem Blütetag.
+    """Next training/harvest event from the current flower day.
 
     Returns {"event": key, "in_days": n, "day": target_flower_day} or None.
     """

@@ -21,6 +21,7 @@ SERVICE_TEST_PUMP = "test_pump"
 SERVICE_ARCHIVE_GROW = "archive_grow"
 SERVICE_CONFIRM_FLOWER = "confirm_flower_switch"
 SERVICE_POSTPONE_FLOWER = "postpone_flower_switch"
+SERVICE_ADD_EXTRA_COST = "add_extra_cost"
 
 ATTR_ENTRY_ID = "entry_id"
 
@@ -66,6 +67,14 @@ _TEST_PUMP_SCHEMA = vol.Schema(
     {
         vol.Optional(ATTR_ENTRY_ID): cv.string,
         vol.Optional("duration", default=15): vol.All(vol.Coerce(int), vol.Range(min=1, max=60)),
+    }
+)
+
+_EXTRA_COST_SCHEMA = vol.Schema(
+    {
+        vol.Optional(ATTR_ENTRY_ID): cv.string,
+        vol.Required("amount"): vol.Coerce(float),
+        vol.Optional("note", default=""): cv.string,
     }
 )
 
@@ -120,6 +129,13 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         for c in _coordinators(hass, call.data.get(ATTR_ENTRY_ID)):
             await c.async_set_phase(call.data["phase"])
 
+    async def _add_extra_cost(call: ServiceCall) -> None:
+        for c in _coordinators(hass, call.data.get(ATTR_ENTRY_ID)):
+            await c.async_add_extra_cost(
+                amount=call.data["amount"],
+                note=call.data.get("note", ""),
+            )
+
     async def _set_harvest(call: ServiceCall) -> None:
         for c in _coordinators(hass, call.data.get(ATTR_ENTRY_ID)):
             await c.async_set_harvest(
@@ -140,6 +156,9 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             )
 
     hass.services.async_register(DOMAIN, SERVICE_LOG_RUNOFF, _log_runoff, _RUNOFF_SCHEMA)
+    hass.services.async_register(
+        DOMAIN, SERVICE_ADD_EXTRA_COST, _add_extra_cost, _EXTRA_COST_SCHEMA
+    )
     hass.services.async_register(
         DOMAIN, SERVICE_EXPORT_CSV, _export_csv, _EXPORT_SCHEMA
     )
@@ -205,6 +224,7 @@ _ALL_SERVICES = (
     SERVICE_ARCHIVE_GROW,
     SERVICE_CONFIRM_FLOWER,
     SERVICE_POSTPONE_FLOWER,
+    SERVICE_ADD_EXTRA_COST,
 )
 
 

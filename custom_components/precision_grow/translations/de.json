@@ -3,6 +3,10 @@
     "abort": {
       "no_clone_sources": "No templates found — neither active grows nor archives on the Synology."
     },
+    "error": {
+      "name_exists": "A grow with this name (or the same entity prefix) already exists.",
+      "invalid_name": "This name produces an empty entity prefix — use letters or digits."
+    },
     "step": {
       "user": {
         "title": "Precision Grow",
@@ -234,12 +238,14 @@
       "next_training_event": { "name": "Next training event", "state": { "lollipopping": "Lollipopping", "defoliation_1": "Defoliation 1", "defoliation_2": "Defoliation 2", "flush": "Flush", "harvest_check": "Harvest check" } },
       "nutrient_recommendation": { "name": "Nutrient recommendation", "state": { "increase_ec": "Increase EC", "keep_ec": "Keep EC", "reduce_ec": "Reduce EC", "flush": "Flush recommended", "check_roots": "Check roots" } },
       "energy_total_kwh": { "name": "Energy total" },
+      "extra_costs_total": { "name": "Extra costs" },
       "energy_cost_eur": { "name": "Energy cost" },
       "daily_cost_eur": { "name": "Daily cost" },
       "cost_per_gram": { "name": "Cost per gram" }
     },
     "binary_sensor": {
-      "flower_switch_due": { "name": "Flower switch due" }
+      "flower_switch_due": { "name": "Flower switch due" },
+      "phase_switch_due": { "name": "Phase switch due" }
     },
     "time": {
       "lights_on": { "name": "Lights on" }
@@ -278,6 +284,7 @@
       "calibrate_reservoir_full": { "name": "Calibrate Reservoir Full" },
       "submit_runoff": { "name": "Submit runoff" },
       "submit_harvest": { "name": "Submit harvest" },
+      "log_extra_cost": { "name": "Log extra cost" },
       "export_csv": { "name": "Export CSV" },
       "save_diary": { "name": "Save diary" },
       "test_setup": { "name": "Test setup" },

@@ -15,7 +15,36 @@ async def async_setup_entry(
     entry: PrecisionGrowConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    async_add_entities([FlowerSwitchDueBinarySensor(entry.runtime_data)])
+    async_add_entities(
+        [
+            FlowerSwitchDueBinarySensor(entry.runtime_data),
+            PhaseSwitchDueBinarySensor(entry.runtime_data),
+        ]
+    )
+
+
+class PhaseSwitchDueBinarySensor(PrecisionGrowEntity, BinarySensorEntity):
+    """On when the current phase reached its target length (Athena schedule)."""
+
+    _attr_translation_key = "phase_switch_due"
+    _attr_icon = "mdi:swap-horizontal-circle"
+
+    def __init__(self, coordinator: PrecisionGrowCoordinator) -> None:
+        super().__init__(coordinator)
+        self._attr_unique_id = f"{coordinator.entry.entry_id}_phase_switch_due"
+
+    @property
+    def is_on(self) -> bool:
+        return bool((self.coordinator.data or {}).get("phase_switch_due"))
+
+    @property
+    def extra_state_attributes(self) -> dict:
+        data = self.coordinator.data or {}
+        return {
+            "switch_to": data.get("phase_switch_to"),
+            "reason": data.get("phase_switch_reason"),
+            "day_in_phase": data.get("day_in_phase"),
+        }
 
 
 class FlowerSwitchDueBinarySensor(PrecisionGrowEntity, BinarySensorEntity):

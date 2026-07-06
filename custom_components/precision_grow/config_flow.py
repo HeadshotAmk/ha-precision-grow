@@ -18,6 +18,7 @@ from homeassistant.config_entries import (
 )
 from homeassistant.core import callback
 from homeassistant.helpers import selector
+from homeassistant.util import slugify
 
 from .const import (
     CONF_CBD,
@@ -202,18 +203,25 @@ class PrecisionGrowConfigFlow(ConfigFlow, domain=DOMAIN):
         src_options = dict(self._clone_config.get("options", {}))
         src_title = self._clone_config.get("title", DEFAULT_NAME)
 
+        errors: dict[str, str] = {}
         if user_input is not None:
-            data = dict(src_data)
-            data[CONF_GROW_NAME] = user_input[CONF_GROW_NAME]
-            data[CONF_PROPAGATION] = user_input[CONF_PROPAGATION]
-            data[CONF_PLANT_AGE_DAYS] = user_input[CONF_PLANT_AGE_DAYS]
-            age = int(user_input[CONF_PLANT_AGE_DAYS] or 0)
-            data[CONF_START_DATE] = (date.today() - timedelta(days=age)).isoformat()
-            return self.async_create_entry(
-                title=user_input[CONF_GROW_NAME],
-                data=data,
-                options=src_options,
-            )
+            error = self._validate_grow_name(user_input[CONF_GROW_NAME])
+            if error:
+                errors[CONF_GROW_NAME] = error
+            else:
+                data = dict(src_data)
+                data[CONF_GROW_NAME] = user_input[CONF_GROW_NAME]
+                data[CONF_PROPAGATION] = user_input[CONF_PROPAGATION]
+                data[CONF_PLANT_AGE_DAYS] = user_input[CONF_PLANT_AGE_DAYS]
+                age = int(user_input[CONF_PLANT_AGE_DAYS] or 0)
+                data[CONF_START_DATE] = (
+                    date.today() - timedelta(days=age)
+                ).isoformat()
+                return self.async_create_entry(
+                    title=user_input[CONF_GROW_NAME],
+                    data=data,
+                    options=src_options,
+                )
 
         schema = vol.Schema(
             {
@@ -237,6 +245,7 @@ class PrecisionGrowConfigFlow(ConfigFlow, domain=DOMAIN):
         return self.async_show_form(
             step_id="clone_finish",
             data_schema=schema,
+            errors=errors,
             description_placeholders={
                 "source": src_title,
                 "strain": src_data.get(CONF_STRAIN, "—"),
@@ -244,12 +253,32 @@ class PrecisionGrowConfigFlow(ConfigFlow, domain=DOMAIN):
         )
 
     # ----- Step 1: basics (new grow) ------------------------------------ #
+    def _validate_grow_name(self, name: str) -> str | None:
+        """Guard against duplicate/empty title slugs.
+
+        The title slug becomes the entity-ID prefix; a duplicate would make
+        HA suffix the new grow's object IDs with _2 and silently break
+        dashboards.
+        """
+        slug = slugify(name or "")
+        if not slug:
+            return "invalid_name"
+        for entry in self._async_current_entries(include_ignore=False):
+            if slugify(entry.title) == slug:
+                return "name_exists"
+        return None
+
     async def async_step_new(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
+        errors: dict[str, str] = {}
         if user_input is not None:
-            self._data.update(user_input)
-            return await self.async_step_strain()
+            error = self._validate_grow_name(user_input[CONF_GROW_NAME])
+            if error:
+                errors[CONF_GROW_NAME] = error
+            else:
+                self._data.update(user_input)
+                return await self.async_step_strain()
 
         schema = vol.Schema(
             {
@@ -302,7 +331,9 @@ class PrecisionGrowConfigFlow(ConfigFlow, domain=DOMAIN):
                 ),
             }
         )
-        return self.async_show_form(step_id="new", data_schema=schema)
+        return self.async_show_form(
+            step_id="new", data_schema=schema, errors=errors
+        )
 
     # ----- Step 1b: strain search --------------------------------------- #
     async def async_step_strain(

@@ -36,6 +36,7 @@ async def async_setup_entry(
             CalibrateReservoirFullButton(coordinator),
             SubmitRunoffButton(coordinator),
             SubmitHarvestButton(coordinator),
+            LogExtraCostButton(coordinator),
             ExportCsvButton(coordinator),
             SaveDiaryButton(coordinator),
             TestSetupButton(coordinator),
@@ -175,6 +176,23 @@ class SubmitHarvestButton(PrecisionGrowEntity, ButtonEntity):
             wet_g=float(nums.get(INPUT_HARVEST_WET, 0) or 0),
             dry_g=float(nums.get(INPUT_HARVEST_DRY, 0) or 0),
             extra_cost=float(nums.get(INPUT_HARVEST_EXTRA, 0) or 0),
+        )
+
+
+class LogExtraCostButton(PrecisionGrowEntity, ButtonEntity):
+    """Add the staged extra-cost amount to the running cost log."""
+
+    _attr_translation_key = "log_extra_cost"
+    _attr_icon = "mdi:cash-plus"
+
+    def __init__(self, coordinator: PrecisionGrowCoordinator) -> None:
+        super().__init__(coordinator)
+        self._attr_unique_id = f"{coordinator.entry.entry_id}_log_extra_cost"
+
+    async def async_press(self) -> None:
+        nums = self.coordinator.state.get("numbers", {})
+        await self.coordinator.async_add_extra_cost(
+            float(nums.get(INPUT_HARVEST_EXTRA, 0) or 0)
         )
 
 

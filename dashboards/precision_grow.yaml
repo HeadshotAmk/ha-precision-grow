@@ -26,7 +26,7 @@ views:
             primary: "{{ state_attr('sensor.grow1_phase','friendly_name') | default('Grow') }}"
             secondary: >-
               {{ states('sensor.grow1_phase') | title }} · Day
-              {{ states('sensor.grow1_day_in_phase') }} of phase
+              {{ states('sensor.grow1_day_in_phase') }}
             icon: mdi:cannabis
             icon_color: green
             fill_container: true
@@ -105,6 +105,25 @@ views:
                       icon: mdi:calendar-clock
                       icon_color: amber
                       primary_info: name
+          - type: conditional
+            conditions:
+              - entity: binary_sensor.grow1_phase_switch_due
+                state: "on"
+            card:
+              type: custom:mushroom-template-card
+              primary: >-
+                Phase done → {{ state_attr('binary_sensor.grow1_phase_switch_due','switch_to') | title | default('Archive') }}
+              secondary: "{{ state_attr('binary_sensor.grow1_phase_switch_due','reason') }}"
+              icon: mdi:swap-horizontal-circle
+              icon_color: deep-orange
+              fill_container: true
+              tap_action:
+                action: call-service
+                service: button.press
+                target:
+                  entity_id: button.grow1_advance_phase
+                confirmation:
+                  text: Switch to the next phase now?
 
       # ===== Climate =====
       - type: grid
@@ -207,15 +226,26 @@ views:
               title: Progress
             apex_config:
               chart:
-                height: 160
+                height: 200
+              legend:
+                show: false
+              grid:
+                padding:
+                  bottom: -80
               plotOptions:
                 radialBar:
                   startAngle: -90
                   endAngle: 90
+                  hollow:
+                    size: "65%"
+                  track:
+                    strokeWidth: "100%"
                   dataLabels:
                     name:
                       show: false
                     value:
+                      fontSize: "22px"
+                      offsetY: -8
                       formatter: |
                         EVAL:function(val){ return Math.round(val) + ' %'; }
             series:
@@ -232,15 +262,26 @@ views:
               title: DLI vs target
             apex_config:
               chart:
-                height: 160
+                height: 200
+              legend:
+                show: false
+              grid:
+                padding:
+                  bottom: -80
               plotOptions:
                 radialBar:
                   startAngle: -90
                   endAngle: 90
+                  hollow:
+                    size: "65%"
+                  track:
+                    strokeWidth: "100%"
                   dataLabels:
                     name:
                       show: false
                     value:
+                      fontSize: "22px"
+                      offsetY: -8
                       formatter: |
                         EVAL:function(val){ return Math.round(val) + ' %'; }
             series:
@@ -625,7 +666,7 @@ views:
             target:
               entity_id:
                 - sensor.grow1_nutrient_recommendation
-            hours_to_show: 336
+            hours_to_show: 168
 
   # =========================================================================
   - title: Energy & cost
@@ -672,6 +713,14 @@ views:
             layout: vertical
             grid_options:
               columns: 6
+          - type: custom:mushroom-entity-card
+            entity: sensor.grow1_extra_costs
+            name: Extras
+            icon: mdi:cash-multiple
+            icon_color: orange
+            layout: vertical
+            grid_options:
+              columns: 6
           - type: custom:apexcharts-card
             header:
               show: true
@@ -690,6 +739,38 @@ views:
       - type: grid
         cards:
           - type: heading
+            heading: Log extra cost
+            heading_style: title
+            icon: mdi:cash-plus
+          - type: custom:mushroom-number-card
+            entity: number.grow1_extra_cost_input
+            name: Amount (€)
+            display_mode: buttons
+            grid_options:
+              columns: 6
+          - type: custom:mushroom-entity-card
+            entity: button.grow1_log_extra_cost
+            name: Log cost
+            icon: mdi:cash-plus
+            icon_color: orange
+            primary_info: name
+            secondary_info: none
+            grid_options:
+              columns: 6
+          - type: markdown
+            content: >-
+              Log fertilizer & supply purchases anytime — they add up in
+              **Extras** and flow into €/g. Amount resets after logging.
+              {% set entries = state_attr('sensor.grow1_extra_costs','entries') %}
+              {% if entries %}
+
+              | Date | € | Note |
+              |---|---|---|
+              {% for e in entries | reverse %}| {{ e.get('date','?') }} | {{ e.get('amount',0) }} | {{ e.get('note','') }} |
+              {% endfor %}{% endif %}
+      - type: grid
+        cards:
+          - type: heading
             heading: Harvest calculator
             heading_style: title
             icon: mdi:scale
@@ -705,12 +786,6 @@ views:
             display_mode: buttons
             grid_options:
               columns: 6
-          - type: custom:mushroom-number-card
-            entity: number.grow1_extra_cost_input
-            name: Extra cost (€)
-            display_mode: buttons
-            grid_options:
-              columns: 6
           - type: custom:mushroom-entity-card
             entity: button.grow1_submit_harvest
             name: Save harvest
@@ -718,8 +793,6 @@ views:
             icon_color: green
             primary_info: name
             secondary_info: none
-            grid_options:
-              columns: 6
 
   # =========================================================================
   - title: Grow log
@@ -768,7 +841,7 @@ views:
               entity_id:
                 - sensor.grow1_phase
                 - sensor.grow1_next_training_event
-            hours_to_show: 720
+            hours_to_show: 168
       - type: grid
         cards:
           - type: heading
@@ -791,13 +864,14 @@ views:
           - type: markdown
             content: >-
               {% for e in state_attr('sensor.grow1_diary_entries','entries') or [] %}
-              ### {{ e.date }} — {{ e.snapshot.phase }} (day {{ e.snapshot.day_total }}, flower {{ e.snapshot.flower_day }})
+              {% set s = e.get('snapshot') or {} %}
+              ### {{ e.get('date','?') }} — {{ s.get('phase','') | title }} (day {{ s.get('day_total','–') }}, flower {{ s.get('flower_day','–') }})
 
-              {% if e.comment %}{{ e.comment }}
+              {% if e.get('comment') %}{{ e.get('comment') }}
 
-              {% endif %}VPD {{ e.snapshot.vpd }} kPa · {{ e.snapshot.temp }} °C · {{ e.snapshot.humidity }} % RH · Dryback {{ e.snapshot.dryback_pct }} % · DLI {{ e.snapshot.dli }}
+              {% endif %}VPD {{ s.get('vpd','–') }} kPa · {{ s.get('temp','–') }} °C · {{ s.get('humidity','–') }} % RH · Dryback {{ s.get('dryback_pct','–') }} % · DLI {{ s.get('dli','–') }}
 
-              {% set img = e.thumb or e.image %}{% if img %}![Day {{ e.snapshot.day_total }}]({{ img }})
+              {% set img = e.get('thumb') or e.get('image') %}{% if img %}![Day {{ s.get('day_total','') }}]({{ img }})
 
               {% endif %}---
 

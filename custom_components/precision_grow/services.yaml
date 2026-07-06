@@ -243,3 +243,30 @@ set_harvest:
           step: 0.5
           unit_of_measurement: €
           mode: box
+add_extra_cost:
+  name: Log extra cost
+  description: Add an amount to the running extra-cost log (fertilizer, supplies, ...). Included in cost-per-gram.
+  fields:
+    entry_id:
+      name: Grow
+      description: Config entry ID of the grow (optional, otherwise all).
+      required: false
+      selector:
+        text:
+    amount:
+      name: Amount
+      description: Cost amount in EUR.
+      required: true
+      example: 24.90
+      selector:
+        number:
+          min: 0
+          max: 10000
+          step: 0.5
+          unit_of_measurement: "EUR"
+    note:
+      name: Note
+      description: What was bought (optional).
+      required: false
+      selector:
+        text:

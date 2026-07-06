@@ -157,7 +157,7 @@ INPUT_NUMBERS: tuple[PGNumberDescription, ...] = (
     PGNumberDescription(
         key=INPUT_RUNOFF_PH,
         translation_key="runoff_ph_input",
-        native_min_value=3, native_max_value=9, native_step=0.1,
+        native_min_value=0, native_max_value=14, native_step=0.1,
         mode=NumberMode.BOX, icon="mdi:ph",
         default_fn=lambda c: _staged(c, INPUT_RUNOFF_PH),
     ),

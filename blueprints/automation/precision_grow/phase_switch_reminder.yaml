@@ -1,0 +1,56 @@
+blueprint:
+  name: "Precision Grow: Phase switch reminder"
+  description: >-
+    Notifies when the current grow phase has reached its target length
+    (Athena-style schedule: clone 14 d, stretch 21 d, ripen = last 14 flower
+    days, drying 14 d). Shows the recommended next phase; switch via the
+    "Advance phase" button or the phase select. Veg -> flower has its own
+    confirm/postpone workflow (flower switch reminder blueprint).
+  domain: automation
+  input:
+    phase_switch_sensor:
+      name: Phase switch due sensor
+      description: The "Phase switch due" binary sensor of the grow.
+      selector:
+        entity:
+          filter:
+            integration: precision_grow
+            domain: binary_sensor
+    notify_service:
+      name: Notify service (optional)
+      description: >-
+        Full notify service name for a push notification, e.g.
+        "notify.mobile_app_phone". Leave empty for the banner only.
+      default: ""
+      selector:
+        text:
+
+triggers:
+  - trigger: state
+    entity_id: !input phase_switch_sensor
+    to: "on"
+
+variables:
+  sensor_id: !input phase_switch_sensor
+  notify_service: !input notify_service
+  reason: "{{ state_attr(sensor_id, 'reason') or 'Phase target reached' }}"
+  next_phase: "{{ state_attr(sensor_id, 'switch_to') or 'done' }}"
+
+actions:
+  - action: persistent_notification.create
+    data:
+      notification_id: "pg_phase_switch_{{ sensor_id }}"
+      title: "Phase switch due"
+      message: >-
+        {{ reason }}. Recommended next phase: {{ next_phase }}.
+        Switch via the "Advance phase" button on the dashboard.
+  - if:
+      - condition: template
+        value_template: "{{ notify_service | length > 0 }}"
+    then:
+      - action: "{{ notify_service }}"
+        data:
+          title: "Phase switch due"
+          message: "{{ reason }} — next: {{ next_phase }}"
+
+mode: single

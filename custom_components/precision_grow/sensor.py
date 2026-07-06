@@ -376,7 +376,7 @@ SENSORS: tuple[PGSensorDescription, ...] = (
         value_fn=lambda d: d.get("comparison_state"),
         attrs_fn=lambda c: c.state.get("comparison") or {},
     ),
-    # --- Tagebuch ---
+    # --- Diary ---
     PGSensorDescription(
         key="diary_count",
         translation_key="diary_count",
@@ -386,7 +386,15 @@ SENSORS: tuple[PGSensorDescription, ...] = (
         value_fn=lambda d: d.get("diary_count"),
         attrs_fn=lambda c: {"entries": c.diary_entries(30)},
     ),
-    # --- Energie / Kosten ---
+    # --- Energy / costs ---
+    PGSensorDescription(
+        key="extra_costs_total",
+        translation_key="extra_costs_total",
+        native_unit_of_measurement="€",
+        icon="mdi:cash-multiple",
+        value_fn=lambda d: d.get("extra_costs_total"),
+        attrs_fn=lambda c: {"entries": (c.state.get("extra_costs") or [])[-20:]},
+    ),
     PGSensorDescription(
         key="energy_total_kwh",
         translation_key="energy_total_kwh",

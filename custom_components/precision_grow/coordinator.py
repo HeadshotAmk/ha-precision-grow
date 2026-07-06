@@ -38,6 +38,7 @@ from .const import (
     CONF_DEVICE_PUMP,
     CONF_FLOWER_DAYS,
     CONF_FLOWER_PHOTOPERIOD,
+    INPUT_HARVEST_EXTRA,
     CONF_LEAF_OFFSET,
     CONF_LIGHTS_ON,
     CONF_MEDIA_PATH,
@@ -78,10 +79,14 @@ from .const import (
     NUTRIENT_PROFILES,
     PHASE_BRIGHTNESS,
     PHASE_BULK,
+    PHASE_CLONE,
+    PHASE_DEFAULT_DAYS,
+    PHASE_DRYING,
     PHASE_RIPEN,
     PHASE_STRETCH,
     PHASE_TARGETS,
     PHASE_VEG,
+    RIPEN_LEAD_DAYS,
     RESERVOIR_CRITICAL_PCT,
     RESERVOIR_LOW_PCT,
     TEXT_DIARY_COMMENT,
@@ -132,7 +137,8 @@ class PrecisionGrowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "peak_day": None,            # ISO date of the current peak/trough day
             "runoff_log": [],            # list of runoff entries
             "energy_kwh": {},            # entity_id -> kWh
-            "harvest": {},               # wet/dry/extra_cost
+            "harvest": {},               # wet/dry/extra_cost (final)
+            "extra_costs": [],           # running cost log [{date, amount, note}]
             "last_energy_ts": None,      # ISO timestamp of last energy integration
             "numbers": {},               # values set via number entities
             "text_inputs": {},           # values set via text entities
@@ -263,6 +269,64 @@ class PrecisionGrowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self.state["veg_extended_days"] = (
             int(self.state.get("veg_extended_days", 0) or 0) + days
         )
+        await self.async_save_state()
+        await self.async_request_refresh()
+
+    def _phase_days(self, phase: str) -> int:
+        """Target duration (days) for a phase; options override const defaults."""
+        overrides = self.entry.options.get("phase_days") or {}
+        return int(overrides.get(phase, PHASE_DEFAULT_DAYS.get(phase, 0)) or 0)
+
+    def _phase_switch_info(self) -> tuple[bool, str | None, str | None]:
+        """Athena-style phase-switch reminder (veg uses the flower-switch flow).
+
+        Returns (due, next_phase, reason).
+        """
+        phase = self.phase
+        day = self._day_in_phase()
+        target = self._phase_days(phase)
+        if phase == PHASE_CLONE and target and day >= target:
+            return True, PHASE_VEG, f"Rooting done (day {day}/{target})"
+        if phase == PHASE_STRETCH and target and day >= target:
+            return True, PHASE_BULK, f"Stretch complete (day {day}/{target})"
+        flower_day = self._flower_day()
+        flower_total = int(self._opt(CONF_FLOWER_DAYS, 63) or 63)
+        if (
+            phase == PHASE_BULK
+            and flower_day is not None
+            and flower_day >= flower_total - RIPEN_LEAD_DAYS
+        ):
+            return True, PHASE_RIPEN, (
+                f"Final {RIPEN_LEAD_DAYS} days (flower day {flower_day}/{flower_total})"
+            )
+        if phase == PHASE_RIPEN and flower_day is not None and flower_day >= flower_total:
+            return True, PHASE_DRYING, f"Harvest due (flower day {flower_day}/{flower_total})"
+        if phase == PHASE_DRYING and target and day >= target:
+            return True, None, f"Drying complete (day {day}/{target})"
+        return False, None, None
+
+    def extra_costs_total(self) -> float:
+        """Sum of the running extra-cost log plus the final harvest extra."""
+        total = sum(
+            float(e.get("amount", 0) or 0)
+            for e in self.state.get("extra_costs", [])
+        )
+        total += float((self.state.get("harvest") or {}).get("extra_cost", 0) or 0)
+        return round(total, 2)
+
+    async def async_add_extra_cost(self, amount: float, note: str = "") -> None:
+        """Append an amount to the running extra-cost log (fertilizer etc.)."""
+        if not amount:
+            return
+        self.state.setdefault("extra_costs", []).append(
+            {
+                "date": dt_util.now().date().isoformat(),
+                "amount": round(float(amount), 2),
+                "note": note or "",
+            }
+        )
+        # Reset the staging input so the next amount starts at 0.
+        self.state.setdefault("numbers", {})[INPUT_HARVEST_EXTRA] = 0
         await self.async_save_state()
         await self.async_request_refresh()
 
@@ -620,6 +684,12 @@ class PrecisionGrowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         data["flower_switch_due"] = self._flower_switch_due()
         data["veg_days_effective"] = self.effective_veg_days()
 
+        # Phase-switch reminder (Athena schedule, all phases except veg)
+        due, to_phase, reason = self._phase_switch_info()
+        data["phase_switch_due"] = due
+        data["phase_switch_to"] = to_phase
+        data["phase_switch_reason"] = reason
+
         # Flower day + next training/harvest event
         flower_day = self._flower_day()
         data["flower_day"] = flower_day
@@ -642,15 +712,16 @@ class PrecisionGrowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             k: round(v, 3) for k, v in self.state["energy_kwh"].items()
         }
 
-        # --- Kosten pro Gramm (nach Harvest) ---
+        # --- Running extra costs + cost per gram (after harvest) ---
+        extra_total = self.extra_costs_total()
+        data["extra_costs_total"] = extra_total
+        data["total_cost_eur"] = round(data["energy_cost_eur"] + extra_total, 2)
         harvest = self.state.get("harvest", {})
         dry = harvest.get("dry_g")
         if dry:
-            extra = harvest.get("extra_cost", 0.0)
-            total_cost = data["energy_cost_eur"] + extra
-            data["cost_per_gram"] = round(total_cost / dry, 2) if dry else None
+            data["cost_per_gram"] = round(data["total_cost_eur"] / dry, 2)
 
-        # --- Runoff letzte Analyse ---
+        # --- Last runoff analysis ---
         if self.state["runoff_log"]:
             data["last_runoff"] = self.state["runoff_log"][-1]
 
