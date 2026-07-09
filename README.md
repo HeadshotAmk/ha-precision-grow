@@ -1,7 +1,7 @@
 # Precision Grow
 
 [![hacs_badge](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://github.com/hacs/integration)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
 
 A full-featured, user-friendly Home Assistant integration for indoor growers — an
 open-source alternative to commercial controllers like TrolMaster, Growlink and
@@ -148,4 +148,4 @@ Replace the `grow1` prefix with your grow's slug.
 
 ## License
 
-MIT — see [LICENSE](LICENSE). Contributions welcome, see [CONTRIBUTING.md](CONTRIBUTING.md).
+GPLv3 — see [LICENSE](LICENSE). Contributions welcome, see [CONTRIBUTING.md](CONTRIBUTING.md).
