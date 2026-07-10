@@ -33,6 +33,12 @@ automation blueprints and a complete Mushroom + ApexCharts dashboard.
   recommendation (increase / keep / reduce EC, flush, check roots)
 - **Energy & cost:** kWh per device, running cost, daily cost, and €/g after harvest
 - **Reservoir:** ultrasonic (JSN-SR04T) distance → % and liters via 2-point calibration, low/critical alerts
+- **Irrigation safety layer (fail-safe):** kill switch, hard max-shot watchdog (forces the
+  pump off), daily shot/runtime caps, anti-drown gate (weight vs field capacity) and
+  reservoir dry-run protection — enforced in the integration, independent of any automation
+- **Substrate sensors (optional):** map a VWC/EC probe (TEROS-12, THC-S, TDR) and the
+  integration switches the dryback source from weight to **VWC (percentage points below
+  the daily peak)** and computes **pore-water EC** (Hilhorst model) for EC steering
 - **Grow diary:** automatic daily value snapshots + your comment and photo per day,
   stored on your Synology with on-device thumbnails
 - **Archive, clone & A/B compare:** archive a finished grow to your NAS, clone any
@@ -82,6 +88,7 @@ All sensors on a single ESP32 (see [`esphome/`](esphome/)):
 | HX711 + load cell | DOUT/CLK | Weight → dryback / transpiration |
 | JSN-SR04T (ultrasonic) | trigger/echo | Reservoir level (distance → % → L) |
 | Float switch | GPIO | Humidifier tank empty |
+| THC-S (RS485 Modbus, optional) | UART | Substrate VWC + bulk EC + temp → pore EC ([`esphome/substrate_sensor_thcs.yaml`](esphome/substrate_sensor_thcs.yaml)) |
 
 The integration is device-agnostic — any sensor/switch entity works. Example: a
 **Mars Hydro FC** light (via its HACS integration) maps to the *Light* device and the
@@ -114,6 +121,8 @@ Import from `blueprints/automation/precision_grow/`:
 | `reservoir_alert` | Low/critical reservoir notifications |
 | `drying_phase_control` | RH/temp control during drying |
 | `daily_runoff_reminder` | Daily reminder to measure runoff |
+| `phase_switch_reminder` | Athena-style phase-length reminders (clone/stretch/bulk/ripen/drying) |
+| `co2_control` | Day/night CO2 setpoint with hysteresis + **1800 ppm safety cutoff** |
 
 ---
 
@@ -129,8 +138,59 @@ Replace the `grow1` prefix with your grow's slug.
 
 ---
 
+## Telegram alerts (no open ports)
+
+All Precision Grow alerts (irrigation safety, pump watchdog, setup/pump tests, CSV export,
+archive, comparisons — plus every blueprint notification) can be pushed to a Telegram bot.
+Telegram is **outbound only**: Home Assistant connects to the Telegram API, so you do
+**not** need port forwarding, a public URL or any inbound access to your instance.
+
+### 1. Create the bot
+
+1. In Telegram, open a chat with [@BotFather](https://t.me/BotFather) and send `/newbot`.
+   Follow the prompts and store the **API token**.
+2. Get your **chat ID**: send any message to [@id_bot](https://t.me/id_bot) and note the ID.
+3. Open the link BotFather gave you for your new bot and send `/start`
+   (bots cannot message you before you started the chat).
+
+### 2. Add the Telegram bot integration in HA
+
+1. **Settings → Devices & services → Add integration → "Telegram bot"**.
+2. Platform: **Broadcast** (send-only — nothing is exposed, not even polling).
+3. Paste the **API token**, leave the API endpoint at the default.
+4. After setup, open the integration entry → three-dots menu → **Add allowed chat ID**
+   and enter your chat ID.
+5. HA creates a notify entity per chat, e.g. `notify.<botname>_<chat>`
+   (check **Settings → Devices & services → Entities**, filter "notify").
+
+No `configuration.yaml` editing is required — this is all UI (HA 2024.8+).
+
+### 3. Point Precision Grow at the bot
+
+**Integration alerts:** Settings → Devices & services → Precision Grow → **Configure**
+→ *General settings* → **Push alerts to** → enter the notify entity, e.g.:
+
+```text
+notify.growbot_123456789
+```
+
+Alternatively enter an action like `telegram_bot.send_message`
+(broadcasts to **all** allowed chat IDs) or a legacy notifier `notify.<name>`.
+Leave empty to keep banner-only notifications.
+
+**Blueprint alerts** (reservoir, training, flower/phase switch, …): set the
+*Notify service* input of the blueprint to `telegram_bot.send_message`.
+
+### 4. Test
+
+Developer tools → Actions → `notify.send_message` with your notify entity, or press
+**Test setup** on the dashboard — the result should arrive in Telegram.
+
 ## Known issues & limitations
 
+- **VWC/EC substrate sensors and the CO2 blueprint are implemented to spec but not yet
+  validated on real hardware** (the maintainer runs a load-cell setup). Feedback from
+  real TDR/CO2 setups is very welcome — see "Support the project".
 - **Photo upload:** Home Assistant core has no generic file-upload card. Diary photos
   are referenced by path/URL (upload via the HA media browser into the grow's media
   folder); the integration then renames the file and creates an on-device thumbnail.
@@ -145,6 +205,18 @@ Replace the `grow1` prefix with your grow's slug.
   to allow multiple grows.
 - **Cloud light (e.g. Mars Hydro):** if you map a cloud-based light, automations depend
   on that cloud + internet connection.
+
+## Support the project
+
+Precision Grow is free and open source (GPLv3), built and tested on hobby hardware.
+If it saves your grow (or your wallet), you can support development:
+
+[![Ko-fi](https://img.shields.io/badge/Ko--fi-Buy%20me%20a%20coffee-FF5E5B?logo=ko-fi&logoColor=white)](https://ko-fi.com/headshotamk)
+
+Hardware donations (VWC/EC substrate probes, CO2 gear) help the most — those
+features are currently implemented to spec but untested on real hardware.
+Bug reports from real setups are just as valuable: please open an
+[issue](https://github.com/HeadshotAmk/ha-precision-grow/issues).
 
 ## License
 

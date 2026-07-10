@@ -37,6 +37,7 @@ from .const import (
     CONF_LEAF_OFFSET,
     CONF_LIGHTS_ON,
     CONF_MEDIA_PATH,
+    CONF_NOTIFY_TARGET,
     CONF_NUTRIENT_PRESET,
     CONF_PHOTOPERIOD,
     CONF_PHOTO_TARGET,
@@ -53,7 +54,10 @@ from .const import (
     CONF_SENSOR_PH,
     CONF_SENSOR_PPFD,
     CONF_SENSOR_RESERVOIR,
+    CONF_SENSOR_SUBSTRATE_EC,
+    CONF_SENSOR_SUBSTRATE_TEMP,
     CONF_SENSOR_TEMP,
+    CONF_SENSOR_VWC,
     CONF_SENSOR_WATER_TEMP,
     CONF_SENSOR_WEIGHT,
     CONF_START_DATE,
@@ -450,6 +454,9 @@ class PrecisionGrowConfigFlow(ConfigFlow, domain=DOMAIN):
                 vol.Optional(CONF_SENSOR_TEMP): _entity(["sensor"]),
                 vol.Optional(CONF_SENSOR_HUMIDITY): _entity(["sensor"]),
                 vol.Optional(CONF_SENSOR_WEIGHT): _entity(["sensor"]),
+                vol.Optional(CONF_SENSOR_VWC): _entity(["sensor"]),
+                vol.Optional(CONF_SENSOR_SUBSTRATE_EC): _entity(["sensor"]),
+                vol.Optional(CONF_SENSOR_SUBSTRATE_TEMP): _entity(["sensor"]),
                 vol.Optional(CONF_SENSOR_RESERVOIR): _entity(["sensor"]),
                 vol.Optional(CONF_SENSOR_CO2): _entity(["sensor"]),
                 vol.Optional(CONF_SENSOR_PPFD): _entity(["sensor"]),
@@ -626,6 +633,10 @@ class PrecisionGrowOptionsFlow(OptionsFlow):
                         mode=selector.NumberSelectorMode.BOX,
                     )
                 ),
+                vol.Optional(
+                    CONF_NOTIFY_TARGET,
+                    default=opts.get(CONF_NOTIFY_TARGET, ""),
+                ): selector.TextSelector(),
             }
         )
         return self.async_show_form(step_id="general", data_schema=schema)

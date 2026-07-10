@@ -37,6 +37,7 @@ async def async_setup_entry(
             SubmitRunoffButton(coordinator),
             SubmitHarvestButton(coordinator),
             LogExtraCostButton(coordinator),
+            MuteAlertsButton(coordinator),
             ExportCsvButton(coordinator),
             SaveDiaryButton(coordinator),
             TestSetupButton(coordinator),
@@ -194,6 +195,20 @@ class LogExtraCostButton(PrecisionGrowEntity, ButtonEntity):
         await self.coordinator.async_add_extra_cost(
             float(nums.get(INPUT_HARVEST_EXTRA, 0) or 0)
         )
+
+
+class MuteAlertsButton(PrecisionGrowEntity, ButtonEntity):
+    """Mute alert escalation pushes for 1 hour."""
+
+    _attr_translation_key = "mute_alerts"
+    _attr_icon = "mdi:bell-off"
+
+    def __init__(self, coordinator: PrecisionGrowCoordinator) -> None:
+        super().__init__(coordinator)
+        self._attr_unique_id = f"{coordinator.entry.entry_id}_mute_alerts"
+
+    async def async_press(self) -> None:
+        await self.coordinator.async_mute_alerts(60)
 
 
 class ExportCsvButton(PrecisionGrowEntity, ButtonEntity):

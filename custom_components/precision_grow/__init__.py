@@ -26,6 +26,11 @@ async def async_setup_entry(
     entry.runtime_data = coordinator
     await coordinator.async_collect_compare_sources()
 
+    # Irrigation safety layer: watch the mapped pump entity
+    unsub_pump = await coordinator.async_setup_pump_guard()
+    if unsub_pump is not None:
+        entry.async_on_unload(unsub_pump)
+
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     entry.async_on_unload(entry.add_update_listener(_async_update_listener))
 

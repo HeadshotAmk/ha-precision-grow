@@ -12,6 +12,7 @@ from homeassistant.components.sensor import (
     SensorStateClass,
 )
 from homeassistant.const import (
+    PERCENTAGE,
     UnitOfEnergy,
     UnitOfMass,
     UnitOfTemperature,
@@ -385,6 +386,58 @@ SENSORS: tuple[PGSensorDescription, ...] = (
         icon="mdi:notebook",
         value_fn=lambda d: d.get("diary_count"),
         attrs_fn=lambda c: {"entries": c.diary_entries(30)},
+    ),
+    # --- Alerts (aggregated) ---
+    PGSensorDescription(
+        key="alert_level",
+        translation_key="alerts",
+        icon="mdi:bell-alert",
+        value_fn=lambda d: d.get("alert_level"),
+        attrs_fn=lambda c: {
+            "count": (c.data or {}).get("alert_count"),
+            "items": (c.data or {}).get("alerts"),
+            "muted_until": (c.data or {}).get("alerts_muted_until"),
+        },
+    ),
+    # --- Substrate (VWC/EC) ---
+    PGSensorDescription(
+        key="vwc",
+        translation_key="vwc",
+        native_unit_of_measurement=PERCENTAGE,
+        state_class=SensorStateClass.MEASUREMENT,
+        icon="mdi:water-opacity",
+        value_fn=lambda d: d.get("vwc"),
+        attrs_fn=lambda c: {
+            "dryback_source": (c.data or {}).get("dryback_source"),
+            "peak_today": c.state.get("vwc_peak"),
+            "trough_today": c.state.get("vwc_trough"),
+        },
+    ),
+    PGSensorDescription(
+        key="pore_ec",
+        translation_key="pore_ec",
+        native_unit_of_measurement="mS/cm",
+        state_class=SensorStateClass.MEASUREMENT,
+        icon="mdi:flash-outline",
+        value_fn=lambda d: d.get("pore_ec"),
+        attrs_fn=lambda c: {
+            "bulk_ec": (c.data or {}).get("substrate_ec"),
+            "substrate_temp": (c.data or {}).get("substrate_temp"),
+        },
+    ),
+    # --- Irrigation safety ---
+    PGSensorDescription(
+        key="irrigation_shots_today",
+        translation_key="irrigation_today",
+        native_unit_of_measurement="shots",
+        icon="mdi:water-sync",
+        value_fn=lambda d: d.get("irrigation_shots_today"),
+        attrs_fn=lambda c: {
+            "runtime_today_min": (c.data or {}).get("irrigation_runtime_today_min"),
+            "forced_off_today": (c.data or {}).get("irrigation_forced_off_today"),
+            "locked": (c.data or {}).get("irrigation_locked"),
+            "lock_reasons": (c.data or {}).get("irrigation_lock_reasons"),
+        },
     ),
     # --- Energy / costs ---
     PGSensorDescription(

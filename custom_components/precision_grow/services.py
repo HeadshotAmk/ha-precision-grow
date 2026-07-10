@@ -22,6 +22,7 @@ SERVICE_ARCHIVE_GROW = "archive_grow"
 SERVICE_CONFIRM_FLOWER = "confirm_flower_switch"
 SERVICE_POSTPONE_FLOWER = "postpone_flower_switch"
 SERVICE_ADD_EXTRA_COST = "add_extra_cost"
+SERVICE_MUTE_ALERTS = "mute_alerts"
 
 ATTR_ENTRY_ID = "entry_id"
 
@@ -75,6 +76,15 @@ _EXTRA_COST_SCHEMA = vol.Schema(
         vol.Optional(ATTR_ENTRY_ID): cv.string,
         vol.Required("amount"): vol.Coerce(float),
         vol.Optional("note", default=""): cv.string,
+    }
+)
+
+_MUTE_SCHEMA = vol.Schema(
+    {
+        vol.Optional(ATTR_ENTRY_ID): cv.string,
+        vol.Optional("minutes", default=60): vol.All(
+            vol.Coerce(int), vol.Range(min=1, max=1440)
+        ),
     }
 )
 
@@ -136,6 +146,10 @@ async def async_setup_services(hass: HomeAssistant) -> None:
                 note=call.data.get("note", ""),
             )
 
+    async def _mute_alerts(call: ServiceCall) -> None:
+        for c in _coordinators(hass, call.data.get(ATTR_ENTRY_ID)):
+            await c.async_mute_alerts(call.data.get("minutes", 60))
+
     async def _set_harvest(call: ServiceCall) -> None:
         for c in _coordinators(hass, call.data.get(ATTR_ENTRY_ID)):
             await c.async_set_harvest(
@@ -158,6 +172,9 @@ async def async_setup_services(hass: HomeAssistant) -> None:
     hass.services.async_register(DOMAIN, SERVICE_LOG_RUNOFF, _log_runoff, _RUNOFF_SCHEMA)
     hass.services.async_register(
         DOMAIN, SERVICE_ADD_EXTRA_COST, _add_extra_cost, _EXTRA_COST_SCHEMA
+    )
+    hass.services.async_register(
+        DOMAIN, SERVICE_MUTE_ALERTS, _mute_alerts, _MUTE_SCHEMA
     )
     hass.services.async_register(
         DOMAIN, SERVICE_EXPORT_CSV, _export_csv, _EXPORT_SCHEMA
@@ -225,6 +242,7 @@ _ALL_SERVICES = (
     SERVICE_CONFIRM_FLOWER,
     SERVICE_POSTPONE_FLOWER,
     SERVICE_ADD_EXTRA_COST,
+    SERVICE_MUTE_ALERTS,
 )
 
 

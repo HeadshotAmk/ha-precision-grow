@@ -270,3 +270,24 @@ add_extra_cost:
       required: false
       selector:
         text:
+mute_alerts:
+  name: Mute alerts
+  description: Suppress alert escalation pushes for a duration (banner still updates).
+  fields:
+    entry_id:
+      name: Grow
+      description: Config entry ID of the grow (optional, otherwise all).
+      required: false
+      selector:
+        text:
+    minutes:
+      name: Minutes
+      description: Mute duration.
+      required: false
+      example: 60
+      selector:
+        number:
+          min: 1
+          max: 1440
+          step: 5
+          unit_of_measurement: min

@@ -22,7 +22,10 @@ from homeassistant.components.persistent_notification import (
 )
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, State
-from homeassistant.helpers.event import async_call_later
+from homeassistant.helpers.event import (
+    async_call_later,
+    async_track_state_change_event,
+)
 from homeassistant.helpers.storage import Store
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.util import dt as dt_util, slugify
@@ -42,6 +45,7 @@ from .const import (
     CONF_LEAF_OFFSET,
     CONF_LIGHTS_ON,
     CONF_MEDIA_PATH,
+    CONF_NOTIFY_TARGET,
     CONF_NUTRIENT_PRESET,
     CONF_PHOTOPERIOD,
     CONF_PLANT_TYPE,
@@ -54,7 +58,10 @@ from .const import (
     CONF_SENSOR_PH,
     CONF_SENSOR_PPFD,
     CONF_SENSOR_RESERVOIR,
+    CONF_SENSOR_SUBSTRATE_EC,
+    CONF_SENSOR_SUBSTRATE_TEMP,
     CONF_SENSOR_TEMP,
+    CONF_SENSOR_VWC,
     CONF_SENSOR_WATER_TEMP,
     CONF_SENSOR_WEIGHT,
     CONF_START_DATE,
@@ -71,8 +78,16 @@ from .const import (
     DEFAULT_POWER_PRICE,
     DEFAULT_TANK_VOLUME_L,
     DOMAIN,
+    DEFAULT_MAX_DAILY_RUNTIME,
+    DEFAULT_MAX_SATURATION,
+    DEFAULT_MAX_SHOT_SECONDS,
+    DEFAULT_MAX_SHOTS_PER_DAY,
     NUM_FLOWER_POSTPONE,
     NUM_LIGHT_DISTANCE,
+    NUM_MAX_DAILY_RUNTIME,
+    NUM_MAX_SATURATION,
+    NUM_MAX_SHOT_SECONDS,
+    NUM_MAX_SHOTS_PER_DAY,
     NUM_PPFD_AT_FULL,
     NUM_PPFD_MANUAL,
     NUM_PPFD_REF_DISTANCE,
@@ -97,6 +112,7 @@ from .const import (
     calculate_dli,
     calculate_dryback,
     calculate_lvpd,
+    calculate_pore_ec,
     calculate_vpd,
     determine_p_phase,
     next_training_event,
@@ -139,6 +155,15 @@ class PrecisionGrowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "energy_kwh": {},            # entity_id -> kWh
             "harvest": {},               # wet/dry/extra_cost (final)
             "extra_costs": [],           # running cost log [{date, amount, note}]
+            # Irrigation safety layer
+            "irrigation_enabled": True,  # kill switch (switch entity)
+            "irrigation_day": None,      # ISO date of the daily counters below
+            "irrigation_shots": 0,       # pump on/off cycles today
+            "irrigation_runtime_s": 0.0, # pump runtime today (seconds)
+            "irrigation_forced_off": 0,  # watchdog/lock interventions today
+            # Alert aggregation
+            "alerts_muted_until": None,  # ISO timestamp; mute escalation pushes
+            "last_alert_level": "ok",
             "last_energy_ts": None,      # ISO timestamp of last energy integration
             "numbers": {},               # values set via number entities
             "text_inputs": {},           # values set via text entities
@@ -149,6 +174,13 @@ class PrecisionGrowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "last_weight": None,         # previous weight (for rate)
             "last_weight_ts": None,
             "ema_transpiration": None,   # smoothed transpiration g/h
+            # Substrate VWC (alternative dryback source)
+            "vwc_day": None,             # ISO date of the VWC peak/trough below
+            "vwc_peak": None,
+            "vwc_trough": None,
+            "last_vwc": None,
+            "last_vwc_ts": None,
+            "ema_vwc_rate": None,        # smoothed VWC dryback rate (pts/h)
             # Reservoir calibration (ultrasonic/ToF distance mm)
             "res_dist_empty": None,
             "res_dist_full": None,
@@ -271,6 +303,264 @@ class PrecisionGrowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         )
         await self.async_save_state()
         await self.async_request_refresh()
+
+    def _safety_num(self, key: str, default: float) -> float:
+        """Safety setting: user value if set, otherwise the const default."""
+        val = self.state.get("numbers", {}).get(key)
+        return float(default) if val is None else float(val)
+
+    def _reset_irrigation_day(self) -> None:
+        """Reset the daily irrigation counters on date change."""
+        today = dt_util.now().date().isoformat()
+        if self.state.get("irrigation_day") != today:
+            self.state["irrigation_day"] = today
+            self.state["irrigation_shots"] = 0
+            self.state["irrigation_runtime_s"] = 0.0
+            self.state["irrigation_forced_off"] = 0
+
+    def _irrigation_lock_reasons(self, data: dict[str, Any]) -> list[str]:
+        """Fail-safe gates: any entry blocks new pump starts."""
+        reasons: list[str] = []
+        if not self.state.get("irrigation_enabled", True):
+            reasons.append("kill_switch")
+        max_shots = self._safety_num(NUM_MAX_SHOTS_PER_DAY, DEFAULT_MAX_SHOTS_PER_DAY)
+        if max_shots > 0 and int(self.state.get("irrigation_shots", 0)) >= max_shots:
+            reasons.append("daily_shot_cap")
+        max_runtime = self._safety_num(NUM_MAX_DAILY_RUNTIME, DEFAULT_MAX_DAILY_RUNTIME)
+        if (
+            max_runtime > 0
+            and float(self.state.get("irrigation_runtime_s", 0) or 0) >= max_runtime * 60
+        ):
+            reasons.append("daily_runtime_cap")
+        # Anti-drown: pot weight close to calibrated field capacity
+        max_sat = self._safety_num(NUM_MAX_SATURATION, DEFAULT_MAX_SATURATION)
+        fc = self.state.get("field_capacity")
+        weight = data.get("weight")
+        if max_sat > 0 and fc and weight and weight >= fc * max_sat / 100.0:
+            reasons.append("pot_saturated")
+        # Anti-drown via substrate VWC (interpreted as absolute VWC %)
+        vwc = data.get("vwc")
+        if max_sat > 0 and vwc is not None and vwc >= max_sat:
+            reasons.append("substrate_saturated")
+        # Dry-run protection: reservoir critically low
+        pct = data.get("reservoir_pct")
+        if pct is not None and pct < RESERVOIR_CRITICAL_PCT:
+            reasons.append("reservoir_critical")
+        return reasons
+
+    async def async_set_irrigation_enabled(self, enabled: bool) -> None:
+        """Kill switch: OFF blocks all pump starts and stops a running pump."""
+        self.state["irrigation_enabled"] = bool(enabled)
+        if not enabled:
+            pump = self.entry.data.get(CONF_DEVICE_PUMP)
+            if pump:
+                st = self.hass.states.get(pump)
+                if st is not None and st.state == "on":
+                    await self._set_device(pump, False)
+        await self.async_save_state()
+        await self.async_request_refresh()
+
+    async def async_setup_pump_guard(self):
+        """Watch the mapped pump entity and enforce the safety layer.
+
+        Returns an unsubscribe callable (or None if no pump is mapped).
+        """
+        self._pump_on_since = None
+        self._pump_watchdog_cancel = None
+        pump = self.entry.data.get(CONF_DEVICE_PUMP)
+        if not pump:
+            return None
+        return async_track_state_change_event(
+            self.hass, [pump], self._on_pump_state_event
+        )
+
+    async def _on_pump_state_event(self, event) -> None:
+        """Pump state listener: lock enforcement, shot watchdog, counters."""
+        new = event.data.get("new_state")
+        old = event.data.get("old_state")
+        if new is None:
+            return
+        turned_on = new.state == "on" and (old is None or old.state != "on")
+        turned_off = new.state != "on" and old is not None and old.state == "on"
+        if turned_on:
+            if (self.data or {}).get("irrigation_locked"):
+                self.state["irrigation_forced_off"] = (
+                    int(self.state.get("irrigation_forced_off", 0)) + 1
+                )
+                await self._set_device(new.entity_id, False)
+                reasons = ", ".join(
+                    (self.data or {}).get("irrigation_lock_reasons") or []
+                )
+                self._notify(
+                    f"Pump start blocked ({reasons or 'irrigation locked'}). "
+                    "Check the irrigation safety settings.",
+                    title=f"{self.entry.title}: irrigation locked",
+                    notification_id=f"pg_irrigation_lock_{self.entry.entry_id}",
+                )
+                await self.async_save_state()
+                return
+            self._pump_on_since = dt_util.utcnow()
+            max_s = self._safety_num(NUM_MAX_SHOT_SECONDS, DEFAULT_MAX_SHOT_SECONDS)
+            if max_s > 0:
+                self._pump_watchdog_cancel = async_call_later(
+                    self.hass, max_s, functools.partial(self._pump_force_off, new.entity_id)
+                )
+        elif turned_off:
+            if self._pump_watchdog_cancel is not None:
+                self._pump_watchdog_cancel()
+                self._pump_watchdog_cancel = None
+            if self._pump_on_since is not None:
+                runtime = (dt_util.utcnow() - self._pump_on_since).total_seconds()
+                self._pump_on_since = None
+                self._reset_irrigation_day()
+                self.state["irrigation_shots"] = (
+                    int(self.state.get("irrigation_shots", 0)) + 1
+                )
+                self.state["irrigation_runtime_s"] = (
+                    float(self.state.get("irrigation_runtime_s", 0) or 0) + runtime
+                )
+                self._schedule_state_save()
+                await self.async_request_refresh()
+
+    async def _pump_force_off(self, entity_id: str, _now: Any = None) -> None:
+        """Hard cap: max shot duration exceeded -> force the pump off."""
+        self._pump_watchdog_cancel = None
+        state = self.hass.states.get(entity_id)
+        if state is None or state.state != "on":
+            return
+        self.state["irrigation_forced_off"] = (
+            int(self.state.get("irrigation_forced_off", 0)) + 1
+        )
+        await self._set_device(entity_id, False)
+        self._notify(
+            "Pump exceeded the max shot duration and was forced off "
+            "(irrigation safety watchdog).",
+            title=f"{self.entry.title}: pump forced off",
+            notification_id=f"pg_pump_watchdog_{self.entry.entry_id}",
+        )
+        await self.async_save_state()
+
+    def _notify(self, message: str, title: str, notification_id: str) -> None:
+        """Persistent notification + optional push target (e.g. Telegram).
+
+        The push target is configured in the options flow (notify_target):
+        either a notify entity (e.g. notify.<botname>_<chat>, Telegram bot
+        integration) or a <domain>.<service> action like
+        telegram_bot.send_message or notify.<legacy_notifier>.
+        """
+        pn_async_create(
+            self.hass, message, title=title, notification_id=notification_id
+        )
+        target = (self.entry.options.get(CONF_NOTIFY_TARGET) or "").strip()
+        if target:
+            self.hass.async_create_task(
+                self._async_send_push(target, title, message)
+            )
+
+    async def _async_send_push(self, target: str, title: str, message: str) -> None:
+        """Best-effort push delivery; failures only log a warning."""
+        try:
+            if target.startswith("notify.") and self.hass.states.get(target) is not None:
+                # Modern notify entity (Telegram bot chat, mobile app, ...)
+                await self.hass.services.async_call(
+                    "notify",
+                    "send_message",
+                    {"entity_id": target, "message": f"{title}\n{message}"},
+                    blocking=False,
+                )
+            elif "." in target:
+                # Generic action, e.g. telegram_bot.send_message or a
+                # legacy notify.<name> service.
+                domain, service = target.split(".", 1)
+                await self.hass.services.async_call(
+                    domain,
+                    service,
+                    {"title": title, "message": message},
+                    blocking=False,
+                )
+            else:
+                _LOGGER.warning("Invalid notify target: %s", target)
+        except Exception as err:  # noqa: BLE001 — alerts must never break updates
+            _LOGGER.warning("Push notification via %s failed: %s", target, err)
+
+    _ALERT_RANK = {"ok": 0, "info": 1, "warning": 2, "critical": 3}
+
+    def _collect_alerts(self, data: dict[str, Any]) -> tuple[str, list[dict[str, str]]]:
+        """Aggregate all status/lock signals into one severity-ranked list."""
+        alerts: list[dict[str, str]] = []
+
+        def add(severity: str, source: str, message: str) -> None:
+            alerts.append({"severity": severity, "source": source, "message": message})
+
+        for key, label in (
+            ("vpd_status", "VPD"),
+            ("dli_status", "DLI"),
+            ("co2_status", "CO2"),
+            ("dryback_status", "Dryback"),
+        ):
+            status = data.get(key)
+            if status in ("high", "low"):
+                add("warning", key, f"{label} {status}")
+        reservoir = data.get("reservoir_status")
+        if reservoir == "low":
+            add("warning", "reservoir", "Reservoir low")
+        elif reservoir == "critical":
+            add("critical", "reservoir", "Reservoir critically low")
+        if data.get("irrigation_locked"):
+            reasons = ", ".join(data.get("irrigation_lock_reasons") or [])
+            severity = (
+                "info" if data.get("irrigation_lock_reasons") == ["kill_switch"]
+                else "warning"
+            )
+            add(severity, "irrigation", f"Irrigation locked ({reasons})")
+        if data.get("flower_switch_due"):
+            add("info", "flower_switch", "12/12 flower switch due")
+        if data.get("phase_switch_due"):
+            add("info", "phase_switch", data.get("phase_switch_reason") or "Phase switch due")
+
+        level = "ok"
+        for alert in alerts:
+            if self._ALERT_RANK[alert["severity"]] > self._ALERT_RANK[level]:
+                level = alert["severity"]
+        return level, alerts
+
+    def _alerts_muted(self) -> bool:
+        until = self.state.get("alerts_muted_until")
+        if not until:
+            return False
+        try:
+            return dt_util.utcnow() < datetime.fromisoformat(until)
+        except (ValueError, TypeError):
+            return False
+
+    async def async_mute_alerts(self, minutes: int = 60) -> None:
+        """Suppress alert escalation pushes for the given duration."""
+        self.state["alerts_muted_until"] = (
+            dt_util.utcnow() + timedelta(minutes=minutes)
+        ).isoformat()
+        await self.async_save_state()
+        await self.async_request_refresh()
+
+    def _maybe_escalate_alerts(self, level: str, alerts: list[dict[str, str]]) -> None:
+        """Push once per escalation (banner + notify target), honoring mute."""
+        last = self.state.get("last_alert_level", "ok")
+        rank, last_rank = self._ALERT_RANK[level], self._ALERT_RANK.get(last, 0)
+        if rank > last_rank and level in ("warning", "critical") and not self._alerts_muted():
+            lines = [f"[{a['severity'].upper()}] {a['message']}" for a in alerts]
+            self._notify(
+                "\n".join(lines),
+                title=f"{self.entry.title}: {level} alerts ({len(alerts)})",
+                notification_id=f"pg_alerts_{self.entry.entry_id}",
+            )
+        elif level == "ok" and last_rank >= self._ALERT_RANK["warning"]:
+            self._notify(
+                "All clear — no active alerts.",
+                title=f"{self.entry.title}: alerts resolved",
+                notification_id=f"pg_alerts_{self.entry.entry_id}",
+            )
+        if level != last:
+            self.state["last_alert_level"] = level
+            self._schedule_state_save()
 
     def _phase_days(self, phase: str) -> int:
         """Target duration (days) for a phase; options override const defaults."""
@@ -504,8 +794,26 @@ class PrecisionGrowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             span = fc - dryw
         elif peak is not None and trough is not None and peak > trough:
             span = peak - trough
-        if span:
+        if span and data.get("dryback_source") != "vwc":
             data["dryback_rate"] = round(ema / span * 100.0, 2)
+
+    def _update_vwc_rate(self, vwc: float, data: dict[str, Any]) -> None:
+        """VWC dryback rate (percentage points/h), EMA-smoothed."""
+        now = dt_util.utcnow()
+        last_ts = self.state.get("last_vwc_ts")
+        last_v = self.state.get("last_vwc")
+        self.state["last_vwc"] = vwc
+        self.state["last_vwc_ts"] = now.isoformat()
+        if last_ts is None or last_v is None:
+            return
+        dt_h = (now - datetime.fromisoformat(last_ts)).total_seconds() / 3600
+        if dt_h <= 0 or dt_h > 1:  # gap/restart -> ignore
+            return
+        rate = max(0.0, (last_v - vwc) / dt_h)  # >0 = drying down
+        prev = self.state.get("ema_vwc_rate")
+        ema = rate if prev is None else 0.3 * rate + 0.7 * prev
+        self.state["ema_vwc_rate"] = ema
+        data["dryback_rate"] = round(ema, 2)
 
     # ------------------------------------------------------------------ #
     # Energy integration
@@ -592,6 +900,37 @@ class PrecisionGrowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         data["brightness_pct"] = self._brightness_pct()
         data["brightness_target"] = PHASE_BRIGHTNESS.get(phase)
 
+        # --- Substrate VWC/EC (preferred dryback source when mapped) ---
+        vwc = self._float_state(CONF_SENSOR_VWC)
+        if vwc is not None:
+            data["vwc"] = round(vwc, 1)
+            today = dt_util.now().date().isoformat()
+            if self.state.get("vwc_day") != today:
+                self.state["vwc_day"] = today
+                self.state["vwc_peak"] = vwc
+                self.state["vwc_trough"] = vwc
+            else:
+                if self.state.get("vwc_peak") is None or vwc > self.state["vwc_peak"]:
+                    self.state["vwc_peak"] = vwc
+                if self.state.get("vwc_trough") is None or vwc < self.state["vwc_trough"]:
+                    self.state["vwc_trough"] = vwc
+            peak_vwc = self.state["vwc_peak"] or vwc
+            # Industry convention: dryback in VWC percentage POINTS below peak.
+            data["dryback_pct"] = round(max(0.0, peak_vwc - vwc), 1)
+            data["dryback_status"] = status_in_range(
+                data["dryback_pct"], *targets["dryback_p3"]
+            )
+            data["dryback_source"] = "vwc"
+            self._update_vwc_rate(vwc, data)
+            sub_ec = self._float_state(CONF_SENSOR_SUBSTRATE_EC)
+            if sub_ec is not None:
+                sub_temp = self._float_state(CONF_SENSOR_SUBSTRATE_TEMP)
+                if sub_temp is None:
+                    sub_temp = temp if temp is not None else 25.0
+                data["substrate_ec"] = round(sub_ec, 2)
+                data["substrate_temp"] = sub_temp
+                data["pore_ec"] = calculate_pore_ec(sub_ec, vwc, sub_temp)
+
         # --- Dryback / weight / transpiration ---
         if weight is not None:
             today = dt_util.now().date().isoformat()
@@ -617,8 +956,10 @@ class PrecisionGrowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 dryback = max(0.0, min(100.0, (fc - weight) / (fc - dryw) * 100.0))
             else:
                 dryback = calculate_dryback(weight, peak, trough)
-            data["dryback_pct"] = round(dryback, 1)
-            data["dryback_status"] = status_in_range(dryback, *targets["dryback_p3"])
+            if data.get("dryback_source") != "vwc":
+                data["dryback_pct"] = round(dryback, 1)
+                data["dryback_status"] = status_in_range(dryback, *targets["dryback_p3"])
+                data["dryback_source"] = "weight"
 
             # Transpiration (g/h) + dryback rate (%/h) from weight time series
             self._update_transpiration(weight, data, fc, dryw, peak, trough)
@@ -669,7 +1010,7 @@ class PrecisionGrowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 else:
                     data["reservoir_status"] = "ok"
 
-        # --- Nährstoffe (live) ---
+        # --- Nutrients (live) ---
         data["ec"] = ec
         data["ph"] = ph
         data["water_temp"] = water_temp
@@ -711,6 +1052,28 @@ class PrecisionGrowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         data["energy_by_device"] = {
             k: round(v, 3) for k, v in self.state["energy_kwh"].items()
         }
+
+        # --- Irrigation safety layer ---
+        self._reset_irrigation_day()
+        lock_reasons = self._irrigation_lock_reasons(data)
+        data["irrigation_enabled"] = bool(self.state.get("irrigation_enabled", True))
+        data["irrigation_locked"] = bool(lock_reasons)
+        data["irrigation_lock_reasons"] = lock_reasons
+        data["irrigation_shots_today"] = int(self.state.get("irrigation_shots", 0))
+        data["irrigation_runtime_today_min"] = round(
+            float(self.state.get("irrigation_runtime_s", 0) or 0) / 60.0, 1
+        )
+        data["irrigation_forced_off_today"] = int(
+            self.state.get("irrigation_forced_off", 0)
+        )
+
+        # --- Alert aggregation ---
+        alert_level, alerts = self._collect_alerts(data)
+        data["alert_level"] = alert_level
+        data["alerts"] = alerts
+        data["alert_count"] = len(alerts)
+        data["alerts_muted_until"] = self.state.get("alerts_muted_until")
+        self._maybe_escalate_alerts(alert_level, alerts)
 
         # --- Running extra costs + cost per gram (after harvest) ---
         extra_total = self.extra_costs_total()
@@ -1033,8 +1396,7 @@ class PrecisionGrowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
     async def async_archive_grow(self) -> str:
         path = await self.hass.async_add_executor_job(self._archive_grow)
-        pn_async_create(
-            self.hass,
+        self._notify(
             f"Grow archived to: `{path}`",
             title=f"Precision Grow — Archive {self.entry.title}",
             notification_id=f"{DOMAIN}_archive_{self.entry.entry_id}",
@@ -1097,8 +1459,7 @@ class PrecisionGrowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         lines = [f"**{a_label}** vs **{b_label}**", ""]
         for r in rows:
             lines.append(f"- {r['field']}: {r['a']} vs {r['b']}")
-        pn_async_create(
-            self.hass,
+        self._notify(
             "\n".join(lines),
             title=f"Precision Grow — Comparison {self.entry.title}",
             notification_id=f"{DOMAIN}_compare_{self.entry.entry_id}",
@@ -1150,8 +1511,7 @@ class PrecisionGrowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             if path.startswith("/local/")
             else f"CSV export saved: `{path}`"
         )
-        pn_async_create(
-            self.hass,
+        self._notify(
             msg,
             title=f"Precision Grow — Export {self.entry.title}",
             notification_id=f"{DOMAIN}_export_{self.entry.entry_id}",
@@ -1298,6 +1658,8 @@ class PrecisionGrowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         device_id = self.entry.data.get(CONF_DEVICE_PUMP)
         if not device_id:
             return {"result": "skipped", "reason": "no pump"}
+        if not self.state.get("irrigation_enabled", True):
+            return {"result": "skipped", "reason": "kill switch off"}
         pct_before = self._current_reservoir_pct()
         weight_before = self._float_state(CONF_SENSOR_WEIGHT)
         prior = self.hass.states.get(device_id)
@@ -1379,8 +1741,7 @@ class PrecisionGrowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         for label, d in results.get("devices", {}).items():
             extra = f" (Δ {d.get('delta')})" if "delta" in d else ""
             lines.append(f"- {label}: {d.get('result')}{extra}")
-        pn_async_create(
-            self.hass,
+        self._notify(
             "\n".join(lines),
             title=f"Precision Grow — Setup test {self.entry.title}",
             notification_id=f"{DOMAIN}_test_{self.entry.entry_id}",

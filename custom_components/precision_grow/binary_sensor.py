@@ -1,7 +1,10 @@
 """Binary sensors for Precision Grow."""
 from __future__ import annotations
 
-from homeassistant.components.binary_sensor import BinarySensorEntity
+from homeassistant.components.binary_sensor import (
+    BinarySensorDeviceClass,
+    BinarySensorEntity,
+)
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
@@ -19,8 +22,35 @@ async def async_setup_entry(
         [
             FlowerSwitchDueBinarySensor(entry.runtime_data),
             PhaseSwitchDueBinarySensor(entry.runtime_data),
+            IrrigationLockedBinarySensor(entry.runtime_data),
         ]
     )
+
+
+class IrrigationLockedBinarySensor(PrecisionGrowEntity, BinarySensorEntity):
+    """On when the safety layer blocks new pump starts."""
+
+    _attr_translation_key = "irrigation_locked"
+    _attr_device_class = BinarySensorDeviceClass.PROBLEM
+    _attr_icon = "mdi:water-off"
+
+    def __init__(self, coordinator: PrecisionGrowCoordinator) -> None:
+        super().__init__(coordinator)
+        self._attr_unique_id = f"{coordinator.entry.entry_id}_irrigation_locked"
+
+    @property
+    def is_on(self) -> bool:
+        return bool((self.coordinator.data or {}).get("irrigation_locked"))
+
+    @property
+    def extra_state_attributes(self) -> dict:
+        data = self.coordinator.data or {}
+        return {
+            "reasons": data.get("irrigation_lock_reasons"),
+            "shots_today": data.get("irrigation_shots_today"),
+            "runtime_today_min": data.get("irrigation_runtime_today_min"),
+            "forced_off_today": data.get("irrigation_forced_off_today"),
+        }
 
 
 class PhaseSwitchDueBinarySensor(PrecisionGrowEntity, BinarySensorEntity):

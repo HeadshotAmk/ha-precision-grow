@@ -54,6 +54,15 @@ views:
                 icon: mdi:clock-time-four
                 icon_color: cyan
                 content: "{{ states('sensor.grow1_p_phase') }}"
+              - type: template
+                icon: >-
+                  {{ 'mdi:bell-off' if state_attr('sensor.grow1_alerts','muted_until') and now().isoformat() < state_attr('sensor.grow1_alerts','muted_until') else 'mdi:bell-alert' if states('sensor.grow1_alerts') in ['warning','critical'] else 'mdi:bell-check' }}
+                icon_color: >-
+                  {% set l = states('sensor.grow1_alerts') %}
+                  {{ 'red' if l == 'critical' else 'orange' if l == 'warning' else 'blue' if l == 'info' else 'green' }}
+                content: >-
+                  {% set n = state_attr('sensor.grow1_alerts','count') | int(0) %}
+                  {{ n ~ ' alert' ~ ('s' if n != 1 else '') if n > 0 else 'OK' }}
           - type: conditional
             conditions:
               - entity: sensor.grow1_next_training_event
@@ -124,6 +133,48 @@ views:
                   entity_id: button.grow1_advance_phase
                 confirmation:
                   text: Switch to the next phase now?
+          - type: conditional
+            conditions:
+              - entity: sensor.grow1_alerts
+                state_not: "ok"
+              - entity: sensor.grow1_alerts
+                state_not: "unknown"
+              - entity: sensor.grow1_alerts
+                state_not: "unavailable"
+            card:
+              type: custom:mushroom-template-card
+              primary: >-
+                {{ state_attr('sensor.grow1_alerts','count') }} active alert(s) — {{ states('sensor.grow1_alerts') | upper }}
+              secondary: >-
+                {{ state_attr('sensor.grow1_alerts','items') | map(attribute='message') | join(' · ') }}
+              icon: mdi:bell-alert
+              icon_color: >-
+                {% set l = states('sensor.grow1_alerts') %}
+                {{ 'red' if l == 'critical' else 'orange' if l == 'warning' else 'blue' }}
+              multiline_secondary: true
+              fill_container: true
+              tap_action:
+                action: call-service
+                service: button.press
+                target:
+                  entity_id: button.grow1_mute_alerts
+                confirmation:
+                  text: Mute alert notifications for 1 hour? (Banner stays visible.)
+          - type: conditional
+            conditions:
+              - entity: binary_sensor.grow1_irrigation_locked
+                state: "on"
+            card:
+              type: custom:mushroom-template-card
+              primary: Irrigation locked
+              secondary: >-
+                {{ state_attr('binary_sensor.grow1_irrigation_locked','reasons') | join(', ') | replace('_',' ') }}
+              icon: mdi:water-off
+              icon_color: red
+              fill_container: true
+              tap_action:
+                action: navigate
+                navigation_path: /lovelace/irrigation
 
       # ===== Climate =====
       - type: grid
@@ -495,6 +546,30 @@ views:
               columns: 6
           - type: custom:mushroom-template-card
             primary: >-
+              {% set v = states('sensor.grow1_vwc') %}
+              VWC {{ v ~ ' %' if v not in ['unknown','unavailable'] else '–' }}
+            secondary: >-
+              {% set p = states('sensor.grow1_pore_ec') %}
+              Pore EC {{ p ~ ' mS/cm' if p not in ['unknown','unavailable'] else '–' }} ·
+              Source: {{ state_attr('sensor.grow1_vwc','dryback_source') | default('weight') }}
+            icon: mdi:water-opacity
+            icon_color: >-
+              {% set v = states('sensor.grow1_vwc') | float(-1) %}
+              {{ 'grey' if v < 0 else 'red' if v > 90 else 'teal' }}
+            grid_options:
+              columns: 6
+          - type: custom:mushroom-template-card
+            primary: Dryback source
+            secondary: >-
+              {{ state_attr('sensor.grow1_vwc','dryback_source') | default('weight') | title }}
+              {% set pk = state_attr('sensor.grow1_vwc','peak_today') %}
+              {% if pk is not none %}· Peak today {{ pk }} %{% endif %}
+            icon: mdi:source-branch
+            icon_color: grey
+            grid_options:
+              columns: 6
+          - type: custom:mushroom-template-card
+            primary: >-
               {% set s = states('sensor.grow1_shot_volume') %}
               Shot {{ s ~ ' mL' if s not in ['unknown','unavailable'] else '–' }}
             secondary: >-
@@ -517,6 +592,53 @@ views:
               {% set s = states('sensor.grow1_reservoir_status') %}
               {{ 'green' if s == 'ok' else 'orange' if s == 'low' else 'red' if s == 'critical' else 'grey' }}
             fill_container: true
+      - type: grid
+        cards:
+          - type: heading
+            heading: Safety
+            heading_style: title
+            icon: mdi:shield-check
+          - type: custom:mushroom-template-card
+            primary: >-
+              {{ 'Irrigation LOCKED' if is_state('binary_sensor.grow1_irrigation_locked','on') else 'Irrigation OK' }}
+            secondary: >-
+              {% set r = state_attr('binary_sensor.grow1_irrigation_locked','reasons') %}
+              {{ r | join(', ') | replace('_',' ') if r else 'All safety gates clear' }}
+            icon: >-
+              {{ 'mdi:water-off' if is_state('binary_sensor.grow1_irrigation_locked','on') else 'mdi:shield-check' }}
+            icon_color: >-
+              {{ 'red' if is_state('binary_sensor.grow1_irrigation_locked','on') else 'green' }}
+            grid_options:
+              columns: 6
+          - type: custom:mushroom-entity-card
+            entity: switch.grow1_irrigation_enabled
+            name: Kill switch
+            icon: mdi:water-check
+            icon_color: teal
+            tap_action:
+              action: toggle
+            grid_options:
+              columns: 6
+          - type: custom:mushroom-template-card
+            primary: >-
+              {{ states('sensor.grow1_irrigation_today') }} shots today
+            secondary: >-
+              {{ state_attr('sensor.grow1_irrigation_today','runtime_today_min') | default(0) }} min runtime ·
+              {{ state_attr('sensor.grow1_irrigation_today','forced_off_today') | default(0) }}× forced off
+            icon: mdi:water-sync
+            icon_color: blue
+            fill_container: true
+          - type: entities
+            title: Limits
+            entities:
+              - entity: number.grow1_max_shot_duration_s
+                name: Max shot (s)
+              - entity: number.grow1_max_shots_per_day
+                name: Max shots/day
+              - entity: number.grow1_max_daily_pump_runtime_min
+                name: Max runtime (min)
+              - entity: number.grow1_max_pot_saturation
+                name: Max saturation (%)
       - type: grid
         cards:
           - type: heading

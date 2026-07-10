@@ -1,0 +1,153 @@
+blueprint:
+  name: "Precision Grow: CO2 control"
+  description: >-
+    Day/night CO2 control with hysteresis and a hard safety cutoff.
+    Opens the CO2 valve/generator below the day setpoint while the lights
+    are on, closes it at the setpoint, and forces it off above the safety
+    cutoff (default 1800 ppm) with an alert. Fail-closed: the valve is
+    also closed when the CO2 sensor becomes unavailable and at lights-off.
+  domain: automation
+  author: HeadshotAmk
+  input:
+    co2_sensor:
+      name: CO2 sensor
+      description: sensor.<grow>_co2 (or any ppm CO2 sensor)
+      selector:
+        entity:
+          filter:
+            - domain: sensor
+    light_progress_sensor:
+      name: Light progress sensor
+      description: sensor.<grow>_light_progress (drives day/night gating)
+      selector:
+        entity:
+          filter:
+            - integration: precision_grow
+    co2_device:
+      name: CO2 valve / generator switch
+      selector:
+        entity:
+          filter:
+            - domain: [switch]
+    day_setpoint:
+      name: Day setpoint (ppm)
+      default: 1200
+      selector:
+        number:
+          min: 400
+          max: 1600
+          step: 50
+          unit_of_measurement: ppm
+          mode: slider
+    hysteresis:
+      name: Hysteresis (ppm)
+      description: Valve opens below setpoint - hysteresis, closes at setpoint.
+      default: 75
+      selector:
+        number:
+          min: 25
+          max: 300
+          step: 25
+          unit_of_measurement: ppm
+          mode: box
+    safety_cutoff:
+      name: Safety cutoff (ppm)
+      description: Hard force-off + alert above this level (occupant safety).
+      default: 1800
+      selector:
+        number:
+          min: 1000
+          max: 5000
+          step: 100
+          unit_of_measurement: ppm
+          mode: box
+    notify_service:
+      name: Notify service for the cutoff alert (optional)
+      description: e.g. telegram_bot.send_message — leave empty for banner only.
+      default: ""
+      selector:
+        text:
+
+variables:
+  co2_sensor: !input co2_sensor
+  light_sensor: !input light_progress_sensor
+  co2_device: !input co2_device
+  day_setpoint: !input day_setpoint
+  hysteresis: !input hysteresis
+  safety_cutoff: !input safety_cutoff
+  notify_service: !input notify_service
+
+triggers:
+  - trigger: state
+    entity_id: !input co2_sensor
+    id: co2_change
+  - trigger: state
+    entity_id: !input light_progress_sensor
+    id: light_change
+  - trigger: time_pattern
+    minutes: "/5"
+    id: tick
+
+conditions: []
+
+actions:
+  - variables:
+      co2: "{{ states(co2_sensor) | float(-1) }}"
+      light_on: "{{ state_attr(light_sensor, 'light_on') == true }}"
+      device_on: "{{ is_state(co2_device, 'on') }}"
+  - choose:
+      # 1) Safety cutoff: force off + alert (highest priority)
+      - conditions:
+          - condition: template
+            value_template: "{{ co2 >= safety_cutoff | float }}"
+        sequence:
+          - action: homeassistant.turn_off
+            target:
+              entity_id: "{{ co2_device }}"
+          - action: persistent_notification.create
+            data:
+              notification_id: "pg_co2_cutoff_{{ co2_device }}"
+              title: "CO2 safety cutoff"
+              message: >-
+                CO2 at {{ co2 }} ppm (cutoff {{ safety_cutoff }} ppm) —
+                valve forced off. Ventilate before entering the room!
+          - if:
+              - condition: template
+                value_template: "{{ notify_service | length > 0 }}"
+            then:
+              - action: "{{ notify_service }}"
+                data:
+                  title: "CO2 safety cutoff"
+                  message: "CO2 {{ co2 }} ppm — valve forced off. Ventilate!"
+      # 2) Fail-closed: sensor dead or lights off -> valve off
+      - conditions:
+          - condition: template
+            value_template: "{{ co2 < 0 or not light_on }}"
+          - condition: template
+            value_template: "{{ device_on }}"
+        sequence:
+          - action: homeassistant.turn_off
+            target:
+              entity_id: "{{ co2_device }}"
+      # 3) Below setpoint - hysteresis while lights on -> valve on
+      - conditions:
+          - condition: template
+            value_template: >-
+              {{ light_on and co2 >= 0 and
+                 co2 < (day_setpoint | float - hysteresis | float) and
+                 not device_on }}
+        sequence:
+          - action: homeassistant.turn_on
+            target:
+              entity_id: "{{ co2_device }}"
+      # 4) Setpoint reached -> valve off
+      - conditions:
+          - condition: template
+            value_template: "{{ co2 >= day_setpoint | float and device_on }}"
+        sequence:
+          - action: homeassistant.turn_off
+            target:
+              entity_id: "{{ co2_device }}"
+
+mode: single
+max_exceeded: silent

@@ -50,6 +50,18 @@ blueprint:
           step: 1
           unit_of_measurement: s
           mode: box
+    lock_sensor:
+      name: Irrigation locked sensor (recommended)
+      description: >-
+        binary_sensor.<grow>_irrigation_locked — blocks shots while the
+        safety layer (kill switch, daily caps, anti-drown, dry-run) is active.
+        Leave empty to skip this gate.
+      default: ""
+      selector:
+        entity:
+          filter:
+            - integration: precision_grow
+              domain: binary_sensor
     min_interval:
       name: Minimum interval between shots (minutes)
       default: 30
@@ -68,6 +80,7 @@ variables:
   pump: !input pump
   shot_duration: !input shot_duration
   min_interval: !input min_interval
+  lock_sensor: !input lock_sensor
 
 trigger:
   - platform: numeric_state
@@ -75,6 +88,10 @@ trigger:
     above: !input dryback_trigger
 
 condition:
+  # safety layer: never shoot while locked (fail-closed if sensor unavailable)
+  - condition: template
+    value_template: >
+      {{ lock_sensor == '' or states(lock_sensor) == 'off' }}
   # only irrigate in P1 / P2
   - condition: state
     entity_id: !input p_phase_sensor

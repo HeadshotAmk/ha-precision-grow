@@ -75,6 +75,9 @@
           "sensor_temp": "Temperature",
           "sensor_humidity": "Humidity",
           "sensor_weight": "Weight / load cell",
+          "sensor_vwc": "Substrate VWC % (TDR/capacitive)",
+          "sensor_substrate_ec": "Substrate bulk EC (mS/cm)",
+          "sensor_substrate_temp": "Substrate temperature",
           "sensor_reservoir": "Reservoir level / distance",
           "sensor_co2": "CO2",
           "sensor_ppfd": "PPFD / PAR",
@@ -126,7 +129,8 @@
         "data": {
           "photoperiod_hours": "Photoperiod (h)",
           "leaf_offset": "Leaf temperature offset (°C)",
-          "power_price": "Power price (€/kWh)"
+          "power_price": "Power price (€/kWh)",
+          "notify_target": "Push alerts to (notify entity or action, empty = banner only)"
         }
       },
       "targets": {
@@ -239,13 +243,21 @@
       "nutrient_recommendation": { "name": "Nutrient recommendation", "state": { "increase_ec": "Increase EC", "keep_ec": "Keep EC", "reduce_ec": "Reduce EC", "flush": "Flush recommended", "check_roots": "Check roots" } },
       "energy_total_kwh": { "name": "Energy total" },
       "extra_costs_total": { "name": "Extra costs" },
+      "alerts": { "name": "Alerts" },
+      "vwc": { "name": "VWC" },
+      "pore_ec": { "name": "Pore EC" },
+      "irrigation_today": { "name": "Irrigation today" },
       "energy_cost_eur": { "name": "Energy cost" },
       "daily_cost_eur": { "name": "Daily cost" },
       "cost_per_gram": { "name": "Cost per gram" }
     },
     "binary_sensor": {
       "flower_switch_due": { "name": "Flower switch due" },
-      "phase_switch_due": { "name": "Phase switch due" }
+      "phase_switch_due": { "name": "Phase switch due" },
+      "irrigation_locked": { "name": "Irrigation locked" }
+    },
+    "switch": {
+      "irrigation_enabled": { "name": "Irrigation enabled" }
     },
     "time": {
       "lights_on": { "name": "Lights on" }
@@ -273,7 +285,11 @@
       "ppfd_at_full": { "name": "PPFD at 100%" },
       "ppfd_ref_distance": { "name": "PPFD calibration distance" },
       "light_distance": { "name": "Light distance (current)" },
-      "ppfd_manual": { "name": "PPFD manual" }
+      "ppfd_manual": { "name": "PPFD manual" },
+      "max_shot_seconds": { "name": "Max shot duration (s)" },
+      "max_shots_per_day": { "name": "Max shots per day" },
+      "max_daily_runtime": { "name": "Max daily pump runtime (min)" },
+      "max_saturation": { "name": "Max pot saturation (%)" }
     },
     "button": {
       "advance_phase": { "name": "Advance phase" },
@@ -285,6 +301,7 @@
       "submit_runoff": { "name": "Submit runoff" },
       "submit_harvest": { "name": "Submit harvest" },
       "log_extra_cost": { "name": "Log extra cost" },
+      "mute_alerts": { "name": "Mute alerts" },
       "export_csv": { "name": "Export CSV" },
       "save_diary": { "name": "Save diary" },
       "test_setup": { "name": "Test setup" },

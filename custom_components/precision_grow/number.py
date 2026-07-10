@@ -34,8 +34,16 @@ from .const import (
     INPUT_RUNOFF_PH,
     INPUT_RUNOFF_PPM,
     INPUT_RUNOFF_VOLUME,
+    DEFAULT_MAX_DAILY_RUNTIME,
+    DEFAULT_MAX_SATURATION,
+    DEFAULT_MAX_SHOT_SECONDS,
+    DEFAULT_MAX_SHOTS_PER_DAY,
     NUM_FLOWER_POSTPONE,
     NUM_LIGHT_DISTANCE,
+    NUM_MAX_DAILY_RUNTIME,
+    NUM_MAX_SATURATION,
+    NUM_MAX_SHOT_SECONDS,
+    NUM_MAX_SHOTS_PER_DAY,
     NUM_PPFD_AT_FULL,
     NUM_PPFD_MANUAL,
     NUM_PPFD_REF_DISTANCE,
@@ -199,6 +207,40 @@ INPUT_NUMBERS: tuple[PGNumberDescription, ...] = (
 )
 
 # PPFD model (settings)
+SAFETY_NUMBERS: tuple[PGNumberDescription, ...] = (
+    PGNumberDescription(
+        key=NUM_MAX_SHOT_SECONDS,
+        translation_key="max_shot_seconds",
+        native_min_value=0, native_max_value=600, native_step=5,
+        native_unit_of_measurement="s", mode=NumberMode.BOX,
+        icon="mdi:timer-alert",
+        default_fn=lambda c: float(DEFAULT_MAX_SHOT_SECONDS),
+    ),
+    PGNumberDescription(
+        key=NUM_MAX_SHOTS_PER_DAY,
+        translation_key="max_shots_per_day",
+        native_min_value=0, native_max_value=200, native_step=1,
+        mode=NumberMode.BOX, icon="mdi:counter",
+        default_fn=lambda c: float(DEFAULT_MAX_SHOTS_PER_DAY),
+    ),
+    PGNumberDescription(
+        key=NUM_MAX_DAILY_RUNTIME,
+        translation_key="max_daily_runtime",
+        native_min_value=0, native_max_value=480, native_step=1,
+        native_unit_of_measurement="min", mode=NumberMode.BOX,
+        icon="mdi:timer-lock",
+        default_fn=lambda c: float(DEFAULT_MAX_DAILY_RUNTIME),
+    ),
+    PGNumberDescription(
+        key=NUM_MAX_SATURATION,
+        translation_key="max_saturation",
+        native_min_value=0, native_max_value=100, native_step=1,
+        native_unit_of_measurement="%", mode=NumberMode.BOX,
+        icon="mdi:water-percent-alert",
+        default_fn=lambda c: float(DEFAULT_MAX_SATURATION),
+    ),
+)
+
 PPFD_NUMBERS: tuple[PGNumberDescription, ...] = (
     PGNumberDescription(
         key=NUM_PPFD_AT_FULL,
@@ -243,7 +285,7 @@ async def async_setup_entry(
     coordinator = entry.runtime_data
     async_add_entities(
         PrecisionGrowNumber(coordinator, desc)
-        for desc in (*NUMBERS, *INPUT_NUMBERS, *PPFD_NUMBERS)
+        for desc in (*NUMBERS, *INPUT_NUMBERS, *PPFD_NUMBERS, *SAFETY_NUMBERS)
     )
 
 

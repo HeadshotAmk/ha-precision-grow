@@ -10,7 +10,8 @@ from typing import Final
 
 DOMAIN: Final = "precision_grow"
 PLATFORMS: Final = [
-    "sensor", "binary_sensor", "select", "number", "button", "text", "time"
+    "sensor", "binary_sensor", "select", "number", "button", "text", "time",
+    "switch",
 ]
 
 # Diary input fields (text)
@@ -47,6 +48,9 @@ CONF_SENSOR_EC: Final = "sensor_ec"
 CONF_SENSOR_PH: Final = "sensor_ph"
 CONF_SENSOR_WATER_TEMP: Final = "sensor_water_temp"
 CONF_SENSOR_BRIGHTNESS: Final = "sensor_brightness"  # light brightness (e.g. Mars Hydro)
+CONF_SENSOR_VWC: Final = "sensor_vwc"                    # substrate VWC % (TDR/capacitive)
+CONF_SENSOR_SUBSTRATE_EC: Final = "sensor_substrate_ec"  # substrate bulk EC (mS/cm)
+CONF_SENSOR_SUBSTRATE_TEMP: Final = "sensor_substrate_temp"  # substrate temperature (°C)
 
 # Step 4 — device mapping
 CONF_DEVICE_HEATER: Final = "device_heater"
@@ -64,6 +68,7 @@ CONF_POWER_ENTITIES: Final = "power_entities"
 # Step 6 — storage
 CONF_PHOTO_TARGET: Final = "photo_target"
 CONF_DIARY_ENABLED: Final = "diary_enabled"
+CONF_NOTIFY_TARGET: Final = "notify_target"  # notify entity or <domain>.<service> for push alerts
 CONF_MEDIA_PATH: Final = "media_path"   # base path (e.g. Synology mount /media/synology)
 
 DEFAULT_MEDIA_PATH: Final = "/media"
@@ -95,6 +100,16 @@ DEFAULT_FLOWER_PHOTOPERIOD: Final = 12.0
 
 # Flower switch (regular plants): manual confirm with postpone
 NUM_FLOWER_POSTPONE: Final = "flower_postpone_days"
+
+# Irrigation safety layer (fail-safe guards for the mapped pump)
+NUM_MAX_SHOT_SECONDS: Final = "max_shot_seconds"        # hard runtime cap per shot (s), 0 = off
+NUM_MAX_SHOTS_PER_DAY: Final = "max_shots_per_day"      # 0 = unlimited
+NUM_MAX_DAILY_RUNTIME: Final = "max_daily_runtime_min"  # pump runtime per day (min), 0 = unlimited
+NUM_MAX_SATURATION: Final = "max_saturation_pct"        # anti-drown: weight vs field capacity (%), 0 = off
+DEFAULT_MAX_SHOT_SECONDS: Final = 60
+DEFAULT_MAX_SHOTS_PER_DAY: Final = 24
+DEFAULT_MAX_DAILY_RUNTIME: Final = 30
+DEFAULT_MAX_SATURATION: Final = 98
 DEFAULT_FLOWER_POSTPONE: Final = 7
 
 # PPFD model (number settings)
@@ -405,6 +420,51 @@ def calculate_dryback(current_weight: float, peak_weight: float, trough_weight: 
     if span <= 0:
         return 0.0
     return max(0.0, ((peak_weight - current_weight) / span) * 100.0)
+
+
+def _permittivity_from_vwc(vwc_pct: float) -> float:
+    """Bulk dielectric permittivity from VWC via the inverse Topp equation.
+
+    Topp (1980): theta = -5.3e-2 + 2.92e-2*eb - 5.5e-4*eb^2 + 4.3e-6*eb^3.
+    Solved numerically (Newton). Approximation — fine for soilless media
+    when the sensor does not report raw permittivity.
+    """
+    theta = vwc_pct / 100.0
+    eb = 1.0 + theta * 70.0  # start value
+    for _ in range(25):
+        f = -5.3e-2 + 2.92e-2 * eb - 5.5e-4 * eb**2 + 4.3e-6 * eb**3 - theta
+        df = 2.92e-2 - 1.1e-3 * eb + 1.29e-5 * eb**2
+        if df == 0:
+            break
+        step = f / df
+        eb -= step
+        if abs(step) < 1e-6:
+            break
+    return max(1.0, eb)
+
+
+def calculate_pore_ec(
+    bulk_ec: float,
+    vwc_pct: float,
+    temp_c: float = 25.0,
+    eps_offset: float = 4.1,
+) -> float | None:
+    """Pore-water EC (mS/cm) via the Hilhorst (2000) model.
+
+    bulk_ec is temperature-normalized to 25 degC (2 %/K), the pore-water
+    permittivity uses eps_p = 80.3 - 0.37*(T-20) and the bulk permittivity
+    is estimated from VWC (inverse Topp). Returns None when the substrate
+    is too dry for the model to be valid.
+    """
+    if not bulk_ec or vwc_pct is None or vwc_pct <= 0:
+        return None
+    ec25 = bulk_ec / (1.0 + 0.02 * (temp_c - 25.0))
+    eps_p = 80.3 - 0.37 * (temp_c - 20.0)
+    eb = _permittivity_from_vwc(vwc_pct)
+    denom = eb - eps_offset
+    if denom <= 0.5:
+        return None
+    return round(eps_p * ec25 / denom, 2)
 
 
 def calculate_dli(ppfd: float, photoperiod_hours: float) -> float:
