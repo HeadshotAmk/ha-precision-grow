@@ -164,6 +164,7 @@ class PrecisionGrowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             # Alert aggregation
             "alerts_muted_until": None,  # ISO timestamp; mute escalation pushes
             "last_alert_level": "ok",
+            "push_ts": {},               # push rate-limit timestamps per notification_id
             "last_energy_ts": None,      # ISO timestamp of last energy integration
             "numbers": {},               # values set via number entities
             "text_inputs": {},           # values set via text entities
@@ -370,9 +371,25 @@ class PrecisionGrowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         pump = self.entry.data.get(CONF_DEVICE_PUMP)
         if not pump:
             return None
+        # Restart gap: if the pump is already ON (e.g. HA restarted mid-shot),
+        # arm the watchdog immediately — otherwise it would run unbounded.
+        st = self.hass.states.get(pump)
+        if st is not None and st.state == "on":
+            max_s = self._safety_num(NUM_MAX_SHOT_SECONDS, DEFAULT_MAX_SHOT_SECONDS)
+            if max_s > 0:
+                self._pump_on_since = dt_util.utcnow()
+                self._pump_watchdog_cancel = async_call_later(
+                    self.hass, max_s, functools.partial(self._pump_force_off, pump)
+                )
         return async_track_state_change_event(
             self.hass, [pump], self._on_pump_state_event
         )
+
+    def cancel_pump_watchdog(self) -> None:
+        """Unload hook: cancel a pending max-shot watchdog timer."""
+        if getattr(self, "_pump_watchdog_cancel", None) is not None:
+            self._pump_watchdog_cancel()
+            self._pump_watchdog_cancel = None
 
     async def _on_pump_state_event(self, event) -> None:
         """Pump state listener: lock enforcement, shot watchdog, counters."""
@@ -396,6 +413,7 @@ class PrecisionGrowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     "Check the irrigation safety settings.",
                     title=f"{self.entry.title}: irrigation locked",
                     notification_id=f"pg_irrigation_lock_{self.entry.entry_id}",
+                    push_cooldown_s=900,
                 )
                 await self.async_save_state()
                 return
@@ -437,25 +455,47 @@ class PrecisionGrowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "(irrigation safety watchdog).",
             title=f"{self.entry.title}: pump forced off",
             notification_id=f"pg_pump_watchdog_{self.entry.entry_id}",
+            push_cooldown_s=900,
         )
         await self.async_save_state()
 
-    def _notify(self, message: str, title: str, notification_id: str) -> None:
+    def _notify(
+        self,
+        message: str,
+        title: str,
+        notification_id: str,
+        push_cooldown_s: int = 0,
+    ) -> None:
         """Persistent notification + optional push target (e.g. Telegram).
 
         The push target is configured in the options flow (notify_target):
         either a notify entity (e.g. notify.<botname>_<chat>, Telegram bot
         integration) or a <domain>.<service> action like
         telegram_bot.send_message or notify.<legacy_notifier>.
+        push_cooldown_s > 0 rate-limits the PUSH per notification_id
+        (the banner always updates).
         """
         pn_async_create(
             self.hass, message, title=title, notification_id=notification_id
         )
         target = (self.entry.options.get(CONF_NOTIFY_TARGET) or "").strip()
-        if target:
-            self.hass.async_create_task(
-                self._async_send_push(target, title, message)
-            )
+        if not target:
+            return
+        if push_cooldown_s > 0:
+            now = dt_util.utcnow()
+            stamps = self.state.setdefault("push_ts", {})
+            last = stamps.get(notification_id)
+            if last:
+                try:
+                    if (now - datetime.fromisoformat(last)).total_seconds() < push_cooldown_s:
+                        return
+                except (ValueError, TypeError):
+                    pass
+            stamps[notification_id] = now.isoformat()
+            self._schedule_state_save()
+        self.hass.async_create_task(
+            self._async_send_push(target, title, message)
+        )
 
     async def _async_send_push(self, target: str, title: str, message: str) -> None:
         """Best-effort push delivery; failures only log a warning."""
@@ -551,12 +591,14 @@ class PrecisionGrowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 "\n".join(lines),
                 title=f"{self.entry.title}: {level} alerts ({len(alerts)})",
                 notification_id=f"pg_alerts_{self.entry.entry_id}",
+                push_cooldown_s=900,
             )
         elif level == "ok" and last_rank >= self._ALERT_RANK["warning"]:
             self._notify(
                 "All clear — no active alerts.",
                 title=f"{self.entry.title}: alerts resolved",
                 notification_id=f"pg_alerts_{self.entry.entry_id}",
+                push_cooldown_s=900,
             )
         if level != last:
             self.state["last_alert_level"] = level

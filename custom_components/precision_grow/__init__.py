@@ -30,6 +30,7 @@ async def async_setup_entry(
     unsub_pump = await coordinator.async_setup_pump_guard()
     if unsub_pump is not None:
         entry.async_on_unload(unsub_pump)
+    entry.async_on_unload(coordinator.cancel_pump_watchdog)
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     entry.async_on_unload(entry.add_update_listener(_async_update_listener))
