@@ -85,9 +85,11 @@ All sensors on a single ESP32 (see [`esphome/`](esphome/)):
 | Sensor | Bus / pin | Function |
 |---|---|---|
 | SHT31 | I²C 0x44 | Temperature + humidity |
-| HX711 + load cell | DOUT/CLK | Weight → dryback / transpiration |
-| JSN-SR04T (ultrasonic) | trigger/echo | Reservoir level (distance → % → L) |
+| 2 × HX711 + load cell | DOUT/CLK | Weight per pot → dryback / transpiration |
+| AJ-SR04M / JSN-SR04T (ultrasonic) | trigger/echo | Reservoir level (distance → % → L) |
+| DS18B20 | 1-Wire | Irrigation water temperature |
 | Float switch | GPIO | Humidifier tank empty |
+| PC817 dimmer | PWM | 1-10 V light dimming (e.g. Mars Hydro FC via RJ12) |
 | THC-S (RS485 Modbus, optional) | UART | Substrate VWC + bulk EC + temp → pore EC ([`esphome/substrate_sensor_thcs.yaml`](esphome/substrate_sensor_thcs.yaml)) |
 
 The integration is device-agnostic — any sensor/switch entity works. Example: a
