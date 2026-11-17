@@ -36,7 +36,7 @@ automation blueprints and a complete Mushroom + ApexCharts dashboard.
 - **Irrigation safety layer (fail-safe):** kill switch, hard max-shot watchdog (forces the
   pump off), daily shot/runtime caps, anti-drown gate (weight vs field capacity) and
   reservoir dry-run protection — enforced in the integration, independent of any automation
-- **Substrate sensors (optional):** map a VWC/EC probe (TEROS-12, THC-S, TDR) and the
+- **Substrate sensors (optional):** map a VWC/EC probe (e.g. TEROS-12, TDR) and the
   integration switches the dryback source from weight to **VWC (percentage points below
   the daily peak)** and computes **pore-water EC** (Hilhorst model) for EC steering
 - **Grow diary:** automatic daily value snapshots + your comment and photo per day,
@@ -90,7 +90,6 @@ All sensors on a single ESP32 (see [`esphome/`](esphome/)):
 | DS18B20 | 1-Wire | Irrigation water temperature |
 | Float switch | GPIO | Humidifier tank empty |
 | PC817 dimmer | PWM | 1-10 V light dimming (e.g. Mars Hydro FC via RJ12) |
-| THC-S (RS485 Modbus, optional) | UART | Substrate VWC + bulk EC + temp → pore EC ([`esphome/substrate_sensor_thcs.yaml`](esphome/substrate_sensor_thcs.yaml)) |
 
 The integration is device-agnostic — any sensor/switch entity works. Example: a
 **Mars Hydro FC** light (via its HACS integration) maps to the *Light* device and the

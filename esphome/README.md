@@ -23,8 +23,6 @@ RJ45 pinout on every port: 1 = 3.3 V, 2 = GND, 3 = signal A, 4 = signal B, 5/6/8
 Light: the 1-10 V input never switches off (minimum ~10 %); switch the lamp with a smart
 plug. Without the ESP the lamp runs at 100 %.
 
-The THC-S substrate sensor (`substrate_sensor_thcs.yaml`) runs on its own ESP32.
-
 ## Setup
 
 1. Create `secrets.yaml` with `wifi_ssid`, `wifi_password`, `ap_password`, `api_encryption_key`, `ota_password`.
