@@ -525,38 +525,66 @@ class PrecisionGrowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
     _ALERT_RANK = {"ok": 0, "info": 1, "warning": 2, "critical": 3}
 
-    def _collect_alerts(self, data: dict[str, Any]) -> tuple[str, list[dict[str, str]]]:
-        """Aggregate all status/lock signals into one severity-ranked list."""
-        alerts: list[dict[str, str]] = []
+    def _collect_alerts(self, data: dict[str, Any]) -> tuple[str, list[dict[str, Any]]]:
+        """Aggregate all status/lock signals into one severity-ranked list.
 
-        def add(severity: str, source: str, message: str) -> None:
-            alerts.append({"severity": severity, "source": source, "message": message})
+        Each alert carries an English `message` (notifications, YAML dashboards)
+        plus a stable `key` and `params` so frontends can translate it.
+        """
+        alerts: list[dict[str, Any]] = []
 
-        for key, label in (
-            ("vpd_status", "VPD"),
-            ("dli_status", "DLI"),
-            ("co2_status", "CO2"),
-            ("dryback_status", "Dryback"),
+        def add(
+            severity: str,
+            source: str,
+            message: str,
+            key: str,
+            params: dict[str, Any] | None = None,
+        ) -> None:
+            alerts.append(
+                {
+                    "severity": severity,
+                    "source": source,
+                    "message": message,
+                    "key": key,
+                    "params": params or {},
+                }
+            )
+
+        for status_key, label, name in (
+            ("vpd_status", "VPD", "vpd"),
+            ("dli_status", "DLI", "dli"),
+            ("co2_status", "CO2", "co2"),
+            ("dryback_status", "Dryback", "dryback"),
         ):
-            status = data.get(key)
+            status = data.get(status_key)
             if status in ("high", "low"):
-                add("warning", key, f"{label} {status}")
+                add("warning", status_key, f"{label} {status}", f"{name}_{status}")
         reservoir = data.get("reservoir_status")
         if reservoir == "low":
-            add("warning", "reservoir", "Reservoir low")
+            add("warning", "reservoir", "Reservoir low", "reservoir_low")
         elif reservoir == "critical":
-            add("critical", "reservoir", "Reservoir critically low")
+            add("critical", "reservoir", "Reservoir critically low", "reservoir_critical")
         if data.get("irrigation_locked"):
-            reasons = ", ".join(data.get("irrigation_lock_reasons") or [])
-            severity = (
-                "info" if data.get("irrigation_lock_reasons") == ["kill_switch"]
-                else "warning"
+            reason_list = list(data.get("irrigation_lock_reasons") or [])
+            reasons = ", ".join(reason_list)
+            severity = "info" if reason_list == ["kill_switch"] else "warning"
+            add(
+                severity,
+                "irrigation",
+                f"Irrigation locked ({reasons})",
+                "irrigation_locked",
+                {"reasons": reason_list},
             )
-            add(severity, "irrigation", f"Irrigation locked ({reasons})")
         if data.get("flower_switch_due"):
-            add("info", "flower_switch", "12/12 flower switch due")
+            add("info", "flower_switch", "12/12 flower switch due", "flower_switch_due")
         if data.get("phase_switch_due"):
-            add("info", "phase_switch", data.get("phase_switch_reason") or "Phase switch due")
+            add(
+                "info",
+                "phase_switch",
+                data.get("phase_switch_reason") or "Phase switch due",
+                "phase_switch_due",
+                {"phase": data.get("phase"), "to": data.get("phase_switch_to")},
+            )
 
         level = "ok"
         for alert in alerts:
@@ -581,7 +609,7 @@ class PrecisionGrowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         await self.async_save_state()
         await self.async_request_refresh()
 
-    def _maybe_escalate_alerts(self, level: str, alerts: list[dict[str, str]]) -> None:
+    def _maybe_escalate_alerts(self, level: str, alerts: list[dict[str, Any]]) -> None:
         """Push once per escalation (banner + notify target), honoring mute."""
         last = self.state.get("last_alert_level", "ok")
         rank, last_rank = self._ALERT_RANK[level], self._ALERT_RANK.get(last, 0)
@@ -636,6 +664,22 @@ class PrecisionGrowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         if phase == PHASE_DRYING and target and day >= target:
             return True, None, f"Drying complete (day {day}/{target})"
         return False, None, None
+
+    def phase_timeline(self) -> list[dict[str, str]]:
+        """Phase segments since the grow start: [{phase, date}], oldest first.
+
+        Grows created before the phase log existed only know the current phase
+        and the date it started.
+        """
+        log = list(self.state.get("phase_log") or [])
+        if log:
+            return log
+        return [{
+            "phase": self.phase,
+            "date": self.state.get("phase_changed_date")
+            or self.entry.data.get(CONF_START_DATE)
+            or dt_util.now().date().isoformat(),
+        }]
 
     def extra_costs_total(self) -> float:
         """Sum of the running extra-cost log plus the final harvest extra."""
@@ -1209,8 +1253,21 @@ class PrecisionGrowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     # Service-Aktionen
     # ------------------------------------------------------------------ #
     async def async_set_phase(self, phase: str) -> None:
-        self.state["phase"] = phase
         today = dt_util.now().date().isoformat()
+        log = self.state.setdefault("phase_log", [])
+        if not log:
+            # Seed with the phase that ran until now (start known, never logged).
+            log.append({
+                "phase": self.phase,
+                "date": self.state.get("phase_changed_date")
+                or self.entry.data.get(CONF_START_DATE)
+                or today,
+            })
+        if log[-1]["date"] == today:
+            log[-1]["phase"] = phase  # several changes on one day: keep the last
+        else:
+            log.append({"phase": phase, "date": today})
+        self.state["phase"] = phase
         self.state["phase_changed_date"] = today
         # Blütebeginn beim Eintritt in Stretch festhalten
         if phase == PHASE_STRETCH and not self.state.get("flower_start_date"):

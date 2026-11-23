@@ -127,7 +127,30 @@ Import from `blueprints/automation/precision_grow/`:
 
 ---
 
-## Dashboard
+## Panel
+
+The integration adds a **Precision Grow** entry to the sidebar (no extra cards or HACS
+frontend plugins needed). It shows one grow at a time, with a selector when you have
+several, and four tabs:
+
+- **Overview:** phase and day, alerts, climate (VPD band), light (DLI band, photoperiod
+  progress), irrigation (weight, dryback, safety switch), reservoir, 24 h charts with the
+  target band of the current phase.
+- **Nutrients:** feed EC/pH (7 days), last runoff with recommendation and trends, runoff form.
+- **Energy & cost:** cost and kWh totals, kWh per device, cost over 30 days, extra-cost
+  and harvest forms.
+- **Grow log:** phase timeline, next training step, diary form and diary entries with
+  thumbnails and the daily snapshot.
+
+Tap a tile to open the entity's details. Forms call the integration's services for the
+selected grow. The panel is visible to all users; HA permissions apply as usual. Panel
+texts are English and German; alerts carry a `key` and `params` so they are translated
+too (the English `message` stays for notifications).
+
+Phase changes are logged from v0.2.0 on. Grows created earlier show their current phase
+since its start date; the time before is shown as unknown.
+
+## Dashboard (YAML, optional)
 
 A complete 6-tab Mushroom + ApexCharts dashboard is in
 [`dashboards/precision_grow.yaml`](dashboards/precision_grow.yaml)
