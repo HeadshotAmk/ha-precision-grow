@@ -8,19 +8,21 @@ import { ENERGY_HISTORY, energyTab } from "./tabs/energy";
 import { growLogTab } from "./tabs/growlog";
 import { NUTRIENTS_HISTORY, nutrientsTab } from "./tabs/nutrients";
 import { OVERVIEW_HISTORY, overviewTab } from "./tabs/overview";
+import { settingsTab } from "./tabs/settings";
 import type { Grow, History, HomeAssistant } from "./types";
 
 const REFRESH_MS = 5 * 60 * 1000;
 const STORAGE_GROW = "precision_grow_panel_grow";
 const STORAGE_TAB = "precision_grow_panel_tab";
 
-type TabId = "overview" | "nutrients" | "energy" | "log";
-const TABS: TabId[] = ["overview", "nutrients", "energy", "log"];
+type TabId = "overview" | "nutrients" | "energy" | "log" | "settings";
+const TABS: TabId[] = ["overview", "nutrients", "energy", "log", "settings"];
 const TAB_HISTORY: Record<TabId, { keys: string[]; hours: number } | null> = {
   overview: OVERVIEW_HISTORY,
   nutrients: NUTRIENTS_HISTORY,
   energy: ENERGY_HISTORY,
   log: null,
+  settings: null,
 };
 
 class PrecisionGrowPanel extends LitElement {
@@ -172,6 +174,7 @@ class PrecisionGrowPanel extends LitElement {
       case "nutrients": return nutrientsTab(c);
       case "energy": return energyTab(c);
       case "log": return growLogTab(c);
+      case "settings": return settingsTab(c);
       default: return html`${this._alerts(c)}${overviewTab(c)}`;
     }
   }
@@ -275,6 +278,20 @@ class PrecisionGrowPanel extends LitElement {
       background: var(--secondary-background-color); }
     .edate { font-weight: 500; }
     .msg { padding: 24px 16px; color: var(--secondary-text-color); }
+    .fields { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 10px; }
+    .field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px; }
+    .hint { font-size: 11px; color: var(--secondary-text-color); }
+    .actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 8px 0; }
+    button.action { font: inherit; cursor: pointer; padding: 8px 14px; border-radius: 6px;
+      border: 1px solid var(--divider-color); background: var(--secondary-background-color);
+      color: var(--primary-text-color); }
+    button.action:disabled { opacity: 0.5; cursor: default; }
+    select.input { font: inherit; font-size: 15px; color: var(--primary-text-color);
+      background: var(--secondary-background-color); border: 1px solid var(--divider-color);
+      border-radius: 6px; padding: 8px; }
+    .kv { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; font-size: 13px; margin: 6px 0; }
+    .kv span { color: var(--secondary-text-color); }
+    .kv b { font-weight: 500; font-variant-numeric: tabular-nums; }
   `;
 }
 

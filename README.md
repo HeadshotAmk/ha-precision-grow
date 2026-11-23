@@ -141,6 +141,11 @@ several, and four tabs:
   and harvest forms.
 - **Grow log:** phase timeline, next training step, diary form and diary entries with
   thumbnails and the daily snapshot.
+- **Settings:** lights-on time and photoperiods, PPFD estimate (reference PPFD and
+  distances), phase (select, next phase, 12/12 confirm/postpone), calibration (reservoir
+  empty/full, field capacity, dry weight, dryback reset, leaf offset) with the current raw
+  value, irrigation safety limits, grow data, and tools (setup test, pump test, CSV export,
+  mute alerts, archive). Risky actions need a second click within 5 s.
 
 Tap a tile to open the entity's details. Forms call the integration's services for the
 selected grow. The panel is visible to all users; HA permissions apply as usual. Panel

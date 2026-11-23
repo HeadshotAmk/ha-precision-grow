@@ -99,6 +99,17 @@ def _grow_payload(hass: HomeAssistant, entry: Any) -> dict[str, Any]:
         "entities": entities,
         "start_date": entry.data.get("start_date"),
         "phase_timeline": coordinator.phase_timeline(),
+        # Mapped source entities (sensor_* / device_* from the setup flow),
+        # e.g. to show the raw value next to a calibration button.
+        "sources": {
+            key: value
+            for key, value in entry.data.items()
+            if key.startswith(("sensor_", "device_")) and isinstance(value, str) and value
+        },
+        "calibration": {
+            key: coordinator.state.get(key)
+            for key in ("field_capacity", "dry_weight", "res_dist_empty", "res_dist_full")
+        },
     }
 
 

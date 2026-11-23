@@ -121,6 +121,95 @@ export class Ctx {
   }
 }
 
+// --- entity-bound controls (settings tab) ----------------------------------
+
+export interface FieldOpts {
+  hint?: string;
+}
+
+/** Call an entity service and toast the result. */
+async function entityCall(c: Ctx, domain: string, service: string, entityId: string, data: Record<string, unknown> = {}): Promise<boolean> {
+  try {
+    await c.hass.callService(domain, service, { entity_id: entityId, ...data });
+    c.toast(c.t.saved);
+    return true;
+  } catch (err: any) {
+    c.toast(`${c.t.save_failed}: ${err?.message ?? err}`);
+    return false;
+  }
+}
+
+function fieldWrap(label: string, control: TemplateResult, hint?: string): TemplateResult {
+  return html`<div class="field">
+    <label>${label}${control}</label>
+    ${hint ? html`<div class="hint">${hint}</div>` : nothing}
+  </div>`;
+}
+
+/** Number entity as an input; saved on change (blur / enter). */
+export function numberField(c: Ctx, key: string, label: string, opts: FieldOpts = {}): Tpl {
+  const id = c.grow.entities[key];
+  const st = id ? c.hass.states[id] : undefined;
+  if (!id || !st) return nothing;
+  const a = st.attributes;
+  const unit = a.unit_of_measurement ? ` (${a.unit_of_measurement})` : "";
+  const onChange = (ev: Event) => {
+    const input = ev.target as HTMLInputElement;
+    const v = toNumber(input.value);
+    if (v === undefined || !input.checkValidity()) {
+      input.value = st.state;
+      return;
+    }
+    entityCall(c, "number", "set_value", id, { value: v });
+  };
+  return fieldWrap(`${label}${unit}`, html`<input type="number" inputmode="decimal"
+    min=${a.min ?? ""} max=${a.max ?? ""} step=${a.step ?? "any"}
+    .value=${st.state === "unknown" || st.state === "unavailable" ? "" : st.state}
+    @change=${onChange}>`, opts.hint);
+}
+
+/** Time entity (HH:MM) as an input. */
+export function timeField(c: Ctx, key: string, label: string, opts: FieldOpts = {}): Tpl {
+  const id = c.grow.entities[key];
+  const st = id ? c.hass.states[id] : undefined;
+  if (!id || !st) return nothing;
+  const onChange = (ev: Event) => {
+    const v = (ev.target as HTMLInputElement).value;
+    if (/^\d{2}:\d{2}$/.test(v)) entityCall(c, "time", "set_value", id, { time: `${v}:00` });
+  };
+  return fieldWrap(label, html`<input type="time" .value=${st.state.slice(0, 5)} @change=${onChange}>`, opts.hint);
+}
+
+/** Press a button entity, optionally behind a two-step confirmation. */
+export function pressButton(c: Ctx, key: string, label: string, confirm?: string, disabled = false): Tpl {
+  const id = c.grow.entities[key];
+  if (!id) return nothing;
+  const press = () => entityCall(c, "button", "press", id);
+  if (confirm) {
+    return html`<pg-confirm-button label=${label} confirm-label=${confirm} ?disabled=${disabled}
+      @confirmed=${press}></pg-confirm-button>`;
+  }
+  return html`<button class="action" ?disabled=${disabled} @click=${press}>${label}</button>`;
+}
+
+/** Select entity: choose an option, apply it behind a confirmation. */
+export function selectApply(c: Ctx, key: string, label: string, names: Record<string, string>, confirm: string): Tpl {
+  const id = c.grow.entities[key];
+  const st = id ? c.hass.states[id] : undefined;
+  if (!id || !st) return nothing;
+  let chosen = st.state;
+  const options = (st.attributes.options ?? []) as string[];
+  return html`<div class="field">
+    <label>${label}
+      <select class="input" @change=${(ev: Event) => (chosen = (ev.target as HTMLSelectElement).value)}>
+        ${options.map((o) => html`<option value=${o} ?selected=${o === st.state}>${names[o] ?? o}</option>`)}
+      </select>
+    </label>
+    <pg-confirm-button label=${c.t.apply} confirm-label=${confirm}
+      @confirmed=${() => chosen !== st.state && entityCall(c, "select", "select_option", id, { option: chosen })}></pg-confirm-button>
+  </div>`;
+}
+
 /** Read named numeric/text fields from a form; empty numbers are omitted. */
 export function formValues(form: HTMLFormElement): Record<string, string> {
   const out: Record<string, string> = {};
