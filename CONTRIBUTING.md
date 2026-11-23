@@ -27,12 +27,29 @@ custom_components/precision_grow/
   strain_api.py      # Cannlytics + community JSON lookup
   services.yaml services.py
   strings.json + translations/   # English base + locales
+  panel.py           # sidebar panel + websocket command precision_grow/grows
+  frontend/precision-grow-panel.js  # built bundle, committed (do not edit)
+frontend/            # panel source (Lit + TypeScript, esbuild)
   data/strains_community.json
 blueprints/automation/precision_grow/   # 9 blueprints
 dashboards/precision_grow.yaml
 esphome/
 docs/
 ```
+
+## Panel (frontend)
+
+Source in `frontend/src`, the bundle is committed so HACS installs work without a
+build step. After changing the source:
+
+```bash
+cd frontend
+npm ci
+npm run check   # type check
+npm run build   # writes custom_components/precision_grow/frontend/precision-grow-panel.js
+```
+
+Commit source and bundle together.
 
 ## Development setup
 

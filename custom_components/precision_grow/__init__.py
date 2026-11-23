@@ -5,13 +5,23 @@ import logging
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import config_validation as cv
+from homeassistant.helpers.typing import ConfigType
 
 from .const import DOMAIN, PLATFORMS
 from .coordinator import PrecisionGrowCoordinator
+from .panel import async_remove_panel, async_setup_panel
 
 _LOGGER = logging.getLogger(__name__)
 
 PrecisionGrowConfigEntry = ConfigEntry[PrecisionGrowCoordinator]
+
+CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
+
+
+async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
+    """Nothing to set up from YAML; the panel is added with the first grow."""
+    return True
 
 
 async def async_setup_entry(
@@ -39,6 +49,9 @@ async def async_setup_entry(
     from .services import async_setup_services
 
     await async_setup_services(hass)
+
+    # Sidebar panel (registered once, shared by all grows)
+    await async_setup_panel(hass)
     return True
 
 
@@ -52,6 +65,7 @@ async def async_unload_entry(
         from .services import async_unload_services
 
         async_unload_services(hass)
+        async_remove_panel(hass)
     return unload_ok
 
 
