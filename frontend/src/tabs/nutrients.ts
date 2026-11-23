@@ -28,7 +28,7 @@ function lastRunoff(c: Ctx): Tpl {
       <div class="tile static"><span class="tlabel">${t.runoff_ph}</span>
         <span class="tval">${c.number(a.runoff_ph, 2)}</span>
         <span class="tsub">${t.trend}: ${t.trends[a.ph_trend] ?? a.ph_trend ?? "–"}</span></div>
-      <div class="tile static"><span class="tlabel">${t.trend} EC</span>
+      <div class="tile static"><span class="tlabel">${t.ec_vs_feed}</span>
         <span class="tval small">${t.trends[a.ec_trend] ?? a.ec_trend ?? "–"}</span></div>
     </div>
     ${a.note ? html`<p class="muted">${t.note}: ${a.note}</p>` : nothing}`;
