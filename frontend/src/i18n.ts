@@ -51,6 +51,7 @@ const EN = {
   note: "Note",
   chart_feed: "Feed EC / pH 7 days",
   trend: "Trend",
+  ec_vs_feed: "Runoff vs. feed",
   recommendations: {
     increase_ec: "Increase EC", keep_ec: "Keep EC", reduce_ec: "Reduce EC",
     flush: "Flush", check_roots: "Check roots",
@@ -162,6 +163,7 @@ const DE: typeof EN = {
   note: "Notiz",
   chart_feed: "EC / pH Nährlösung 7 Tage",
   trend: "Trend",
+  ec_vs_feed: "Runoff vs. Nährlösung",
   recommendations: {
     increase_ec: "EC erhöhen", keep_ec: "EC beibehalten", reduce_ec: "EC senken",
     flush: "Spülen", check_roots: "Wurzeln prüfen",

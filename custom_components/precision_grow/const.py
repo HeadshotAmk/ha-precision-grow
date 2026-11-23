@@ -520,7 +520,9 @@ def analyze_runoff(
         recommendation = "check_roots"
     elif runoff_ec > target_ec + EC_REDUCE_DELTA:
         recommendation = "reduce_ec"
-    elif runoff_ec < target_ec and ph_trend == "normal":
+    elif runoff_ec < target_ec and ph_trend == "normal" and ec_trend != "ec_stacking":
+        # Never raise the feed while salts build up in the substrate
+        # (runoff above feed EC): the plant is not using what it gets.
         recommendation = "increase_ec"
     else:
         recommendation = "keep_ec"
