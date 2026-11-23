@@ -29,6 +29,8 @@ export interface Grow {
   dli_target: [number | null, number | null];
   brightness_target: number | null;
   entities: Record<string, string>;
+  start_date?: string | null;
+  phase_timeline?: { phase: string; date: string }[];
 }
 
 /** Compressed history state (minimal_response): s = state, lu = last_updated (s). */

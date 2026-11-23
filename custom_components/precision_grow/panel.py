@@ -97,6 +97,8 @@ def _grow_payload(hass: HomeAssistant, entry: Any) -> dict[str, Any]:
         "dli_target": [data.get("dli_target_min"), data.get("dli_target_max")],
         "brightness_target": data.get("brightness_target"),
         "entities": entities,
+        "start_date": entry.data.get("start_date"),
+        "phase_timeline": coordinator.phase_timeline(),
     }
 
 

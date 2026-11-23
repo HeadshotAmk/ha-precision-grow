@@ -135,7 +135,11 @@ export class PgChart extends LitElement {
   }
 
   private _time(t: number): string {
-    return new Date(t).toLocaleTimeString(this.lang, { hour: "2-digit", minute: "2-digit" });
+    const d = new Date(t);
+    if (this.end - this.start > 36 * 3600 * 1000) {
+      return d.toLocaleDateString(this.lang, { day: "2-digit", month: "2-digit" });
+    }
+    return d.toLocaleTimeString(this.lang, { hour: "2-digit", minute: "2-digit" });
   }
 
   static styles = css`
