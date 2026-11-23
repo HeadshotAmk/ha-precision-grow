@@ -31,6 +31,8 @@ export interface Grow {
   entities: Record<string, string>;
   start_date?: string | null;
   phase_timeline?: { phase: string; date: string }[];
+  sources?: Record<string, string>;
+  calibration?: Record<string, number | null>;
 }
 
 /** Compressed history state (minimal_response): s = state, lu = last_updated (s). */
